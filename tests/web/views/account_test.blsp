@@ -26,6 +26,21 @@
   "GET /account carrying the session `cookie`."
   (request app-router "GET" "/account" {:headers {:cookie (str "_hatch_session=" cookie)}}))
 
+(defn csrf-token (cookie)
+  "The CSRF token stashed in the signed session `cookie`."
+  (get (web/session/decode-session session-secret cookie) "_csrf"))
+
+(defn save-name (name)
+  "The full browser flow: GET /account (mints the CSRF token + session cookie), then POST
+  with that cookie and the matching `_csrf_token`. Returns the POST response."
+  (let (g (request app-router "GET" "/account")
+        cookie (session-cookie g)
+        tok (csrf-token cookie))
+    (request app-router "POST" "/account"
+      {:headers {:content-type "application/x-www-form-urlencoded"
+                 :cookie (str "_hatch_session=" cookie)}
+       :body (str "name=" name "&_csrf_token=" tok)})))
+
 (describe "GET /account"
   (test "renders the form"
     (let (resp (request app-router "GET" "/account"))
@@ -34,19 +49,21 @@
   (test "with no session, prompts for a name"
     (assert= (body-contains? (request app-router "GET" "/account") "know your name yet") true)))
 
-(describe "POST /account (body params + session + flash)"
-  (test "save redirects back to /account"
-    (let (resp (request app-router
-                 "POST"
-                 "/account"
-                 {:headers {:content-type "application/x-www-form-urlencoded"} :body "name=Ada"}))
+(describe "POST /account (CSRF-protected; body params + session + flash)"
+  (test "a POST without a CSRF token is rejected with 403"
+    (let (g (request app-router "GET" "/account")
+          cookie (session-cookie g)
+          resp (request app-router "POST" "/account"
+                 {:headers {:content-type "application/x-www-form-urlencoded"
+                            :cookie (str "_hatch_session=" cookie)}
+                  :body "name=Ada"}))
+      (assert= (status resp) 403)))
+  (test "save with a valid token redirects back to /account"
+    (let (resp (save-name "Ada"))
       (assert= (status resp) 302)
       (assert= (resp-header resp :location) "/account")))
   (test "saved name persists in the session; flash shows once then clears"
-    (let (saved (request app-router
-                  "POST"
-                  "/account"
-                  {:headers {:content-type "application/x-www-form-urlencoded"} :body "name=Grace"})
+    (let (saved (save-name "Grace")
           c1 (session-cookie saved)
           g1 (get-with c1)
           c2 (session-cookie g1)
