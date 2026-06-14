@@ -1,0 +1,7 @@
+;; Tests for the demo app. `(:use main)` loads src/main.blsp, which in turn
+;; `(:use ...)`s the Hatch framework modules resolved from the `:path` dep — so
+;; this also proves the dependency resolves and its modules load.
+(defmodule main-test (:use main) (:use test))
+
+(describe "hatch-demo"
+  (test "main is callable" (is (fn? main))))

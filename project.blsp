@@ -1,0 +1,11 @@
+;; hatch-demo — a demo app built on the Hatch web framework.
+;;
+;; Depends on Hatch via a local :path so you can develop both side by side
+;; (edits to ../hatch are live — no re-fetch). Swap to a :git dep to pin a
+;; published release:
+;;
+;;   :dependencies [[hatch :git "https://github.com/.../hatch.git" :ref "v0.1.0"]]
+(project
+  :name    "hatch-demo"
+  :version "0.1.0"
+  :dependencies [[hatch :path "../hatch"]])
