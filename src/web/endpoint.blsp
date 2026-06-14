@@ -1,12 +1,23 @@
 (defmodule web/endpoint
   "The endpoint — the boundary between the web server and the app, à la Phoenix's
-  Endpoint. It composes the HTTP router (web/routes) and the live-view WebSocket
-  handler (web/views/demo) and starts the server. `main` just boots it."
+  Endpoint. It bridges raw http/server requests into the router (web/routes), wires
+  the live-view WebSocket handler (web/views/demo), and starts the server. `main`
+  just boots it."
   (:use http/server)                          ; start
-  (:use web/routes :refer [adapter])
+  (:use web/conn :refer [build])              ; raw request → conn
+  (:use web/routes :refer [app-router])
   (:use web/views/demo :refer [live-handler]))
 
+(defn adapter (req)
+  "Bridge an http/server raw request → conn → router → http/response map. This is
+  the server-integration seam; the router itself (app-router) is transport-agnostic."
+  (let (conn (build req)
+        resp (app-router conn))
+    {:status  (get resp :status 200)
+     :headers (get resp :headers {})
+     :body    (get resp :body "")}))
+
 (defn serve (port)
-  "Start the web server on `port`: HTTP requests go through the router's adapter,
-  WebSocket upgrades to the live-view handler. Returns the listener pid."
+  "Start the web server on `port`: HTTP requests are bridged through the router,
+  WebSocket upgrades go to the live-view handler. Returns the listener pid."
   (start port adapter live-handler))
