@@ -28,4 +28,8 @@
       (assert= (includes? html "visitor xyz") true)))
   (test "marks the current visitor as you"
     (let (html (live-render (presence/live-spec) {:id "abc" :members *roster*}))
-      (assert= (includes? html "you") true))))
+      (assert= (includes? html "you") true)))
+  ; unmount untracks on live-navigate (in the session process); a no-op here for the
+  ; untracked test process, but it must wire up and run cleanly.
+  (test "unmount runs cleanly (untracks from presence)"
+    (assert= (live-unmount (presence/live-spec) {:id "x" :members (list)}) nil)))

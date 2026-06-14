@@ -43,4 +43,8 @@
       (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
         (live-render spec m))
       (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) {:id "z" :events (list) :waves 0}))
-        (live-render spec {:id "z" :events (list) :waves 0})))))
+        (live-render spec {:id "z" :events (list) :waves 0}))))
+  ; unmount unsubscribes from the topic (it runs on live-navigate, in the session process) —
+  ; here it's a no-op for the untracked test process, but it must wire up and run cleanly.
+  (test "unmount runs cleanly (unsubscribes from the room topic)"
+    (assert= (live-unmount (room/live-spec) {:id "x" :events (list) :waves 0}) nil)))

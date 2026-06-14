@@ -30,6 +30,10 @@
       (assoc model :members (get msg :presence))
       model))
 
+  ; Live-navigating away keeps this session process alive, so untrack explicitly so we
+  ; drop off the roster immediately rather than lingering until the socket closes.
+  (unmount (model) (presence/untrack topic))
+
   (render (model)
     [:div {:data-live "/presence" :class "space-y-6"}
       [:div {:class "prose"}
