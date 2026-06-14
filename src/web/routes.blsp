@@ -10,7 +10,9 @@
   (:use web/layout)
   (:alias web/auth)
   ; fetch-session / fetch-flash — the session + flash plugs for /account
-  (:alias web/session))
+  (:alias web/session)
+  ; protect-from-forgery — CSRF check for the /account POST
+  (:alias web/csrf))
 ; The secret that signs session cookies. In a real app this comes from the environment
 ; ($HATCH_SECRET_KEY_BASE); the dev fallback keeps `nest run` zero-config. Never ship the
 ; fallback — anyone with it can forge sessions.
@@ -28,10 +30,11 @@
   ; (here), inside a live-session, or wrapping one — see web/router's defrouter doc.
   (through [(auth/basic-auth "admin" "admin" "hatch-demo dev")]
     (get "/dev" web/views/diagnostics/dev-info))
-  ; HTTP Tier-1 demo: form body params + signed session + one-shot flash. Both routes run
-  ; through fetch-session (loads/writes the signed cookie) then fetch-flash (one-shot read);
-  ; `save` does POST→redirect→GET, the canonical pattern for showing a flash after a write.
-  (through [(session/fetch-session session-secret) session/fetch-flash]
+  ; HTTP Tier-1 demo: form body params + signed session + one-shot flash, with CSRF
+  ; protection. fetch-session loads/writes the signed cookie, fetch-flash does the one-shot
+  ; read, and protect-from-forgery mints a token (embedded in the form via csrf/csrf-input)
+  ; and rejects a POST whose token doesn't match. `save` does POST→redirect→GET.
+  (through [(session/fetch-session session-secret) session/fetch-flash csrf/protect-from-forgery]
     (get "/account" web/views/account/index)
     (post "/account" web/views/account/save))
   ; Live views (web/live), grouped into two live-sessions — the socket-side auth

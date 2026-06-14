@@ -10,7 +10,9 @@
   ; param, redirect-resp
   (:use web/conn)
   ; get-session / put-session / put-flash
-  (:alias web/session))
+  (:alias web/session)
+  ; csrf-input — the hidden token field the POST is checked against
+  (:alias web/csrf))
 (defn index (conn)
   "GET /account — show the session-remembered name and a form to change it."
   (page conn
@@ -23,6 +25,7 @@
       (greeting conn)
       [:form {:method "post" :action "/account" :class "card bg-base-200"}
         [:div {:class "card-body space-y-3"}
+          (csrf/csrf-input conn)
           [:label {:class "label"} [:span {:class "label-text"} "Display name"]]
           [:input {:name "name"
                    :value (session/get-session conn "name" "")
