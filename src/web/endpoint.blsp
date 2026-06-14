@@ -1,8 +1,8 @@
 (defmodule web/endpoint
   "The endpoint — the boundary between the web server and the app, à la Phoenix's
-  Endpoint. It bridges raw http/server requests into the router (web/routes), wires
-  the live-view WebSocket handler (web/views/demo), and starts the server. `main`
-  just boots it."
+  Endpoint. It owns this server's port, bridges raw http/server requests into the
+  router (web/routes), wires the live-view WebSocket handler (web/views/counter),
+  and starts the server. `main` just calls `(serve)`."
   (:use http/server)                          ; start
   (:use web/conn :refer [build])              ; raw request → conn
   (:use web/routes :refer [app-router])
@@ -21,7 +21,12 @@
      :headers (get resp :headers {})
      :body    (get resp :body "")}))
 
-(defn serve (port)
-  "Start the web server on `port`: HTTP requests are bridged through the router,
-  WebSocket upgrades go to the live-view handler. Returns the listener pid."
-  (start port adapter live-handler))
+(defn port ()
+  "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
+  (or (string->number (or (getenv "HATCH_PORT") "")) 5000))
+
+(defn serve ()
+  "Start the web server on this endpoint's port: HTTP requests are bridged through
+  the router, WebSocket upgrades go to the live-view handler. Returns the listener
+  pid."
+  (start (port) adapter live-handler))
