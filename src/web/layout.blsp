@@ -11,28 +11,40 @@
     ".topnav a{color:#cbd5e1;text-decoration:none;font-size:.95rem}"
     ".topnav a:hover{color:#fff}"
     ".topnav .brand{color:#fff;font-weight:600;font-size:1.05rem;margin-right:.5rem}"
+    ".topnav .navgroup{color:#6b7280;font-size:.72rem;text-transform:uppercase;"
+    "letter-spacing:.06em;margin-left:.75rem;border-left:1px solid #374151;padding-left:.75rem}"
     "main{max-width:52rem;margin:0 auto;padding:1.5rem}"))
 
 (defn nav-bar ()
   "The top menu bar — links to the demo's pages. `data-nav` opts a link into live
   navigation: from a live page, clicking another live view swaps it over the open
-  socket (no reload); a non-live target falls back to a normal page load."
+  socket (no reload); a non-live target falls back to a normal page load.
+
+  The live views are grouped under their live-session (`customer` / `admin`). Clicking
+  between two views in the *same* session swaps over the socket — no reload; crossing
+  into the other session forces a full page reload (the socket can't cross the auth
+  boundary). Same view module, distinct paths per session."
   [:nav {:class "topnav"}
-   [:a {:href "/" :data-nav true :class "brand"} "Hatch"]
-   [:a {:href "/counter" :data-nav true} "Counter"]
-   [:a {:href "/counter-inline" :data-nav true} "Counter (inline)"]
-   [:a {:href "/page-inline" :data-nav true} "Page (inline)"]
-   [:a {:href "/page-template" :data-nav true} "Page (template)"]
-   [:a {:href "/echo" :data-nav true} "Echo"]])
+    [:a {:href "/" :data-nav true :class "brand"} "Hatch"]
+    [:span {:class "navgroup"} "customer"]
+    [:a {:href "/counter" :data-nav true} "Counter"]
+    [:a {:href "/counter-inline" :data-nav true} "Counter (inline)"]
+    [:span {:class "navgroup"} "admin"]
+    [:a {:href "/admin/counter" :data-nav true} "Counter"]
+    [:a {:href "/admin/counter-inline" :data-nav true} "Counter (inline)"]
+    [:span {:class "navgroup"} "pages"]
+    [:a {:href "/page-inline" :data-nav true} "Page (inline)"]
+    [:a {:href "/page-template" :data-nav true} "Page (template)"]
+    [:a {:href "/echo" :data-nav true} "Echo"]])
 
 (defn layout (title & children)
   "The shared page shell: menu bar on top, page content below."
   [:html {}
-   [:head {}
-    [:meta {:charset "utf-8"}]
-    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-    [:title {} title]
-    [:style {} *chrome-css*]]
-   [:body {}
-    (nav-bar)
-    [:main {} children]]])
+    [:head {}
+      [:meta {:charset "utf-8"}]
+      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+      [:title {} title]
+      [:style {} *chrome-css*]]
+    [:body {}
+      (nav-bar)
+      [:main {} children]]])

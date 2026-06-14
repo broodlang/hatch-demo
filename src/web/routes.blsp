@@ -34,8 +34,11 @@
   auth/basic-auth first, so this is reached only once credentials check out; the plug
   assigns :current-user, which we echo back."
   (text-resp conn
-    (str "dev endpoint — authenticated as " (get-assign conn :current-user) "\n"
-      "request-id: " (get-assign conn :request-id))))
+    (str "dev endpoint — authenticated as "
+      (get-assign conn :current-user)
+      "\n"
+      "request-id: "
+      (get-assign conn :request-id))))
 
 (defrouter app-router
   (get "/" web/views/home/index)
@@ -47,15 +50,16 @@
   ; Plain pages (web/page): inline Hiccup vs a .bml template.
   (get "/page-inline" web/views/page-inline/index)
   (get "/page-template" web/views/page-template/index)
-  ; Live views (web/live): inline render vs a .bml template. Each (live …) clause
-  ; auto-generates the GET mount page + registers the WebSocket dispatch.
+  ; Live views (web/live), grouped into two live-sessions — the socket-side auth
+  ; boundary. The same view module is mounted at distinct paths per session: navigating
+  ; within a session swaps over the open socket (no reload); crossing into the other
+  ; session forces a full reload. A path belongs to exactly one session, so the two
+  ; groups must use distinct paths.
+  (live-session "customer"
+    (live "/counter" web/views/counter)
+    (live "/counter-inline" web/views/counter-inline))
   (live-session "admin"
-      (live "/counter-inline" web/views/counter-inline)
-    (live "/counter" web/views/counter))
-
-(live-session "customer"
-  (live "/counter-inline" web/views/counter-inline)
-  (live "/counter" web/views/counter))
-
+    (live "/admin/counter" web/views/counter)
+    (live "/admin/counter-inline" web/views/counter-inline))
   (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
   (any "/echo" echo-page))
