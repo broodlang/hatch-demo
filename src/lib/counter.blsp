@@ -3,8 +3,8 @@
   just the model and the operations on it, so it's unit-testable on its own.")
 
 (defn init (start)
-  "A fresh counter model: click count `start`, tick count 0."
-  {:count start :ticks 0})
+  "A fresh model: click count `start`, plus two independent auto-tickers at 0."
+  {:count start :fast 0 :slow 0})
 
 (defn increment (model)
   "Bump the click counter."
@@ -14,6 +14,6 @@
   "Drop the click counter."
   (assoc model :count (dec (get model :count))))
 
-(defn tick (model)
-  "Advance the auto-ticker (called once per second by the live view)."
-  (assoc model :ticks (inc (get model :ticks))))
+(defn bump (model k)
+  "Advance the counter under key `k` (e.g. :fast or :slow) — used by the tickers."
+  (assoc model k (inc (get model k))))

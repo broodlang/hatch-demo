@@ -47,10 +47,14 @@
       [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :count))]
       [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
       [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
+     [:section {:style "margin-bottom:2rem"}
+      [:h2 {} "Fast ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :fast))]
+      [:p {:style "color:#888"} "server pushes +1 every second"]]
      [:section {}
-      [:h2 {} "Auto ticker"]
-      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :ticks))]
-      [:p {:style "color:#888"} "increments every second, pushed by the server"]]])
+      [:h2 {} "Slow ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :slow))]
+      [:p {:style "color:#888"} "server pushes +1 every three seconds"]]])
 
   (on "increment" (params model)
     (lib/counter/increment model))
@@ -59,7 +63,10 @@
     (lib/counter/decrement model))
 
   (tick 1000 (model)
-    (lib/counter/tick model)))
+    (lib/counter/bump model :fast))
+
+  (tick 3000 (model)
+    (lib/counter/bump model :slow)))
 
 (def live-handler
-  (ws-handler-for mount render handle-event live-tick-ms handle-tick))
+  (ws-handler-for mount render handle-event live-ticks handle-tick))
