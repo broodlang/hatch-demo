@@ -1,15 +1,13 @@
 (defmodule web/views/counter-inline
   "Example 2a — a live view (web/live) whose markup is written **inline** as Hiccup in
-  the `(render …)` clause. It is the twin of web/views/counter, which renders the same
-  UI from counter.bml via `(template …)` — the two produce identical HTML, proving the
-  .bml surface lowers to exactly this Hiccup."
-  (:use web/live)             ; deflive
+  the `(render …)` clause. The twin of web/views/counter: it reuses that view's model
+  logic (init/increment/decrement/bump) verbatim and only swaps the markup — proving the
+  .bml surface and inline Hiccup lower to the same UI."
+  ; deflive
+  (:use web/live)
+  ; shared model logic
+  (:use web/views/counter :only [init increment decrement bump])
   (:implements LiveModule))
-
-(defn init (start) {:count start :fast 0 :slow 0})
-(defn increment (model) (assoc model :count (inc (get model :count))))
-(defn decrement (model) (assoc model :count (dec (get model :count))))
-(defn bump (model k) (assoc model k (inc (get model k))))
 
 (deflive
   (mount (params)
@@ -17,24 +15,26 @@
 
   (render (model)
     ; The Hiccup that counter.bml lowers to: `{@count}` is `(get model :count)`, and the
-    ; `color:{…}` attribute interpolation is the `(str …)` below.
-    [:div {:data-live "/counter-inline" :style "font-family:sans-serif;padding:2rem"}
-     [:p {} [:a {:href "/"} "← examples"]]
-     [:section {:style "margin-bottom:2rem"}
-      [:h2 {} "Click counter · inline render"]
-      [:p {:style (str "font-size:3rem;margin:.5rem 0;color:"
-                    (if (< (get model :count) 0) "#b91c1c" "#111"))}
-       (get model :count)]
-      [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
-      [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
-     [:section {:style "margin-bottom:2rem"}
-      [:h2 {} "Fast ticker"]
-      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :fast))]
-      [:p {:style "color:#888"} "server pushes +1 every second"]]
-     [:section {}
-      [:h2 {} "Slow ticker"]
-      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :slow))]
-      [:p {:style "color:#888"} "server pushes +1 every three seconds"]]])
+    ; conditional daisyUI class (text-error on negative) is the `(str …)` below.
+    [:div {:data-live "/counter-inline" :class "space-y-6"}
+      [:div {:class "card bg-base-200"}
+        [:div {:class "card-body"}
+          [:h2 {:class "card-title"} "Click counter · inline render"]
+          [:div {:class (str "text-6xl font-bold "
+                          (if (< (get model :count) 0) "text-error" "text-base-content"))}
+            (get model :count)]
+          [:div {:class "flex gap-2 mt-2"}
+            [:button {:data-event "decrement" :class "btn btn-outline btn-lg"} "−"]
+            [:button {:data-event "increment" :class "btn btn-primary btn-lg"} "+"]]]]
+      [:div {:class "stats stats-vertical sm:stats-horizontal shadow w-full"}
+        [:div {:class "stat"}
+          [:div {:class "stat-title"} "Fast ticker"]
+          [:div {:class "stat-value"} (str (get model :fast))]
+          [:div {:class "stat-desc"} "server pushes +1 every second"]]
+        [:div {:class "stat"}
+          [:div {:class "stat-title"} "Slow ticker"]
+          [:div {:class "stat-value"} (str (get model :slow))]
+          [:div {:class "stat-desc"} "server pushes +1 every three seconds"]]]])
 
   (on "increment" (params model) (increment model))
   (on "decrement" (params model) (decrement model))

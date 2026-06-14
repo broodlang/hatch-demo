@@ -1,20 +1,51 @@
 (defmodule main
   "Entry point: start logging and boot the web endpoint (which owns its port)."
   (:use web/endpoint :only [serve])
-  (:use log :only [start-logger fn-backend]))
+  (:use log :only [start-logger fn-backend])
+  ; json-encode — the opt-in JSON log format (LOG_FORMAT=json)
+  (:use json :only [json-encode]))
 
 (defn log-level ()
   "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the
   per-request debug lines show out of the box."
   (keyword (or (getenv "LOG_LEVEL") "debug")))
 
-(defn println-backend ()
-  "A logger backend that writes each formatted line to stdout with `print` (the
-  formatted line already ends in a newline)."
-  (fn-backend (fn (line) (print line))))
+; Level keyword -> labels for the two formats.
+(def main--labels {:debug "DEBUG" :info "INFO" :warn "WARN" :error "ERROR"})
+(def main--lower {:debug "debug" :info "info" :warn "warn" :error "error"})
+
+(defn text-line (rec)
+  "Format a log record as a human-readable line: `[LEVEL ts] msg` plus a newline. The
+  default — each request is already a self-contained line (`[rid] GET / -> 200 in 4.2ms`)."
+  (str "["
+    (or (get main--labels (get rec :level)) "?")
+    " "
+    (get rec :ts)
+    "] "
+    (get rec :msg)
+    "\n"))
+
+(defn json-line (rec)
+  "Format a log record as one JSON object per line (NDJSON) — the shape Grafana Loki
+  (`| json`), Datadog (auto-parsed), and AppSignal ingest as fields. `:msg` becomes
+  `message` (the platforms' log-body attribute), `:ts` a unix-ms `timestamp`, the level
+  its own `level` field, and every structured field on `:meta` (request_id / method /
+  path / status_code / duration_ms / event …) is flattened alongside. The base fields win
+  over `:meta` on any clash, so a caller can't shadow them."
+  (str (json-encode (merge (get rec :meta)
+                      {:timestamp (get rec :ts)
+                       :level (or (get main--lower (get rec :level)) "info")
+                       :message (get rec :msg)}))
+    "\n"))
+
+(defn log-backend ()
+  "The configured backend, written to stdout: one JSON line per record when $LOG_FORMAT
+  is \"json\" (for Grafana / Datadog / AppSignal), else human-readable text (the default)."
+  (let (fmt (if (= (getenv "LOG_FORMAT") "json") json-line text-line))
+    (fn-backend (fn (line) (print line)) {:format fmt})))
 
 (defn main ()
   "Start logging, boot the endpoint, and keep the process alive."
-  (start-logger {:level (log-level) :backends [(println-backend)]})
+  (start-logger {:level (log-level) :backends [(log-backend)]})
   (serve)
   (receive (:shutdown nil)))

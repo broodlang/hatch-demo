@@ -1,0 +1,51 @@
+#!/usr/bin/env sh
+# bin/setup — one-time asset toolchain install (no npm, no Node).
+#
+# Downloads the Tailwind v4 standalone CLI + the daisyUI plugin into this project.
+# Hatch only serves static/; this just fetches the bundler that produces static/app.css.
+# To use a different tool, replace these downloads (and assets/app.css + the *assets*
+# config in src/web/endpoint.blsp) — nothing in the framework cares.
+#
+# Pin versions with env vars, e.g.  TAILWIND_VERSION=v4.1.11 DAISYUI_VERSION=v5.0.0 bin/setup
+set -eu
+
+TW_VERSION="${TAILWIND_VERSION:-latest}"
+DUI_VERSION="${DAISYUI_VERSION:-latest}"
+
+os="$(uname -s)"
+arch="$(uname -m)"
+case "$os" in
+  Linux)  plat="linux" ;;
+  Darwin) plat="macos" ;;
+  *) echo "unsupported OS: $os (edit bin/setup)" >&2; exit 1 ;;
+esac
+case "$arch" in
+  x86_64|amd64)  cpu="x64" ;;
+  aarch64|arm64) cpu="arm64" ;;
+  *) echo "unsupported arch: $arch (edit bin/setup)" >&2; exit 1 ;;
+esac
+
+gh_url() { # repo, version, file
+  if [ "$2" = latest ]; then
+    echo "https://github.com/$1/releases/latest/download/$3"
+  else
+    echo "https://github.com/$1/releases/download/$2/$3"
+  fi
+}
+
+mkdir -p bin assets/vendor
+
+echo "→ tailwindcss standalone ($plat-$cpu, $TW_VERSION)"
+curl -fsSL "$(gh_url tailwindlabs/tailwindcss "$TW_VERSION" "tailwindcss-${plat}-${cpu}")" \
+  -o bin/tailwindcss
+chmod +x bin/tailwindcss
+
+echo "→ daisyUI plugin ($DUI_VERSION)"
+curl -fsSL "$(gh_url saadeghi/daisyui "$DUI_VERSION" daisyui.js)" -o assets/vendor/daisyui.js
+curl -fsSL "$(gh_url saadeghi/daisyui "$DUI_VERSION" daisyui-theme.js)" \
+  -o assets/vendor/daisyui-theme.js
+
+echo
+echo "✓ installed. Next:"
+echo "    nest run            # dev: starts the server + 'tailwindcss --watch' together"
+echo "    HATCH_ENV=prod ...  # release: run (web/assets/build web/endpoint/*assets*) first"

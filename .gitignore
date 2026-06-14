@@ -1,1 +1,8 @@
 /_deps/
+
+# Asset toolchain — fetched by bin/setup, regenerable, not committed.
+/bin/tailwindcss
+/assets/vendor/
+
+# Generated stylesheet — built from assets/app.css by bin/tailwindcss.
+/static/app.css

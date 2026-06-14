@@ -1,0 +1,37 @@
+;; View + routing tests for the demo, driven through Hatch's view test harness
+;; (web/test) — no server, no socket. Exercises the real router (app-router), so it
+;; also covers the top-level `through` auth group and the 404 fallback.
+(defmodule web-views-home-test
+  ; request / status / body-contains? — from the Hatch :path dep
+  (:use web/test)
+  ; app-router
+  (:use web/routes)
+  (:use test))
+
+(describe "GET /"
+  (test "renders the landing page"
+    (let (resp (request app-router "GET" "/"))
+      (assert= (status resp) 200)
+      (assert= (body-contains? resp "Hatch — markup, four ways") true)))
+  (test "links the bundled stylesheet"
+    (assert= (body-contains? (request app-router "GET" "/") "/static/app.css") true))
+  (test "uses the daisyUI navbar shell"
+    (assert= (body-contains? (request app-router "GET" "/") "navbar") true)))
+
+(describe "top-level through (auth) on /dev"
+  (test "no credentials → 401 challenge"
+    (let (resp (request app-router "GET" "/dev"))
+      (assert= (status resp) 401)
+      (assert= (resp-header resp :www-authenticate)
+        "Basic realm=\"hatch-demo dev\", charset=\"UTF-8\"")))
+  (test "valid credentials → 200 (admin:admin)"
+    (let (resp (request app-router
+                 "GET"
+                 "/dev"
+                 {:headers {:authorization "Basic YWRtaW46YWRtaW4="}}))
+      (assert= (status resp) 200)
+      (assert= (body-contains? resp "authenticated as admin") true))))
+
+(describe "router fallback"
+  (test "an unknown path is a 404"
+    (assert= (status (request app-router "GET" "/no-such-page")) 404)))

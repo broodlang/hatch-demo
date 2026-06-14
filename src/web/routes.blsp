@@ -1,65 +1,55 @@
+; auth/basic-auth — the dev endpoint's Basic-auth plug
 (defmodule web/routes
   "The demo's HTTP routes: a server-agnostic `path → handler` table. Each handler
   takes a conn and returns a conn; nothing here knows about the raw server format —
   that bridge lives in web/endpoint. Pages live under web/views.
   (Named web/routes, not web/router — the framework owns the `web/router` module.)"
-  (:use web/router)  ; defrouter
-  (:use web/conn)  ; text-resp
-  (:use web/layout)  ; layout — the (live …) clause builds its mount page with it
-  (:alias web/auth))  ; auth/basic-auth — the dev endpoint's Basic-auth plug
-
+  ; defrouter
+  (:use web/router)
+  ; layout — the (live …) clause builds its mount page with it
+  (:use web/layout)
+  (:alias web/auth)
+  ; fetch-session / fetch-flash — the session + flash plugs for /account
+  (:alias web/session))
+; The secret that signs session cookies. In a real app this comes from the environment
+; ($HATCH_SECRET_KEY_BASE); the dev fallback keeps `nest run` zero-config. Never ship the
+; fallback — anyone with it can forge sessions.
+(def session-secret
+  (or (getenv "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
 ; Static assets (the live-view client + ./static) are served by web/endpoint, before
-; the router — so this file is purely the app's routes.
-
-(defn echo-page (conn)
-  "ANY /echo — reflect the request back as plain text."
-  (text-resp conn
-    (str "Method:  "
-      (get conn :method)
-      "\n"
-      "Path:    "
-      (get conn :path)
-      "\n"
-      "Query:   "
-      (get conn :query)
-      "\n"
-      "Headers: "
-      (pr-str (get conn :headers))
-      "\n"
-      "Body:    "
-      (get conn :body))))
-
-(defn dev-info (conn)
-  "GET /dev — a Basic-auth-gated dev endpoint. The (through …) group runs
-  auth/basic-auth first, so this is reached only once credentials check out; the plug
-  assigns :current-user, which we echo back."
-  (text-resp conn
-    (str "dev endpoint — authenticated as "
-      (get-assign conn :current-user)
-      "\n"
-      "request-id: "
-      (get-assign conn :request-id))))
+; the router — so this file is purely the app's routes; handlers live under web/views.
 
 (defrouter app-router
   (get "/" web/views/home/index)
-  ; A pipeline/middleware group: every route inside runs through the listed plugs
-  ; first. basic-auth halts with a 401 challenge until the browser sends admin:admin,
-  ; so /dev is gated without the handler knowing anything about auth.
+  ; A `through` pipeline at the *top level* — outside any live-session. Every route
+  ; inside runs through the listed plugs first; basic-auth halts with a 401 challenge
+  ; until the browser sends admin:admin, so /dev is gated without the handler knowing
+  ; anything about auth. Groups nest in any order: a `through` works at the top level
+  ; (here), inside a live-session, or wrapping one — see web/router's defrouter doc.
   (through [(auth/basic-auth "admin" "admin" "hatch-demo dev")]
-    (get "/dev" dev-info))
-  ; Plain pages (web/page): inline Hiccup vs a .bml template.
-  (get "/page-inline" web/views/page-inline/index)
-  (get "/page-template" web/views/page-template/index)
+    (get "/dev" web/views/diagnostics/dev-info))
+  ; HTTP Tier-1 demo: form body params + signed session + one-shot flash. Both routes run
+  ; through fetch-session (loads/writes the signed cookie) then fetch-flash (one-shot read);
+  ; `save` does POST→redirect→GET, the canonical pattern for showing a flash after a write.
+  (through [(session/fetch-session session-secret) session/fetch-flash]
+    (get "/account" web/views/account/index)
+    (post "/account" web/views/account/save))
   ; Live views (web/live), grouped into two live-sessions — the socket-side auth
   ; boundary. The same view module is mounted at distinct paths per session: navigating
   ; within a session swaps over the open socket (no reload); crossing into the other
   ; session forces a full reload. A path belongs to exactly one session, so the two
   ; groups must use distinct paths.
   (live-session "customer"
+    ; Plain pages (web/page): inline Hiccup vs a .bml template.
+    (get "/page-inline" web/views/page-inline/index)
+    (get "/page-template" web/views/page-template/index)
+
     (live "/counter" web/views/counter)
-    (live "/counter-inline" web/views/counter-inline))
+    (live "/counter-inline" web/views/counter-inline)
+    ; A live form with as-you-type validation feedback over the socket.
+    (live "/signup" web/views/signup))
   (live-session "admin"
     (live "/admin/counter" web/views/counter)
     (live "/admin/counter-inline" web/views/counter-inline))
-  (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
-  (any "/echo" echo-page))
+  ; /slow sleeps 2s before responding — exercises web/req-log's slow-request warn.
+  (get "/slow" web/views/diagnostics/slow-page))

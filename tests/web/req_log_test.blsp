@@ -1,0 +1,70 @@
+;; Unit tests for web/req-log's structured records, rendered across the 4 log variants:
+;; format (text / json) × combine (combined / separate). These exercise the pure record
+;; builders (web/req-log) and the pure formatters (main), so they're deterministic — no
+;; async tracking process or watchdog timers involved.
+;;
+;; combined = one folded line per request (just the `out` record, held until done).
+;; separate = an `in` line on arrival (start-record) + an `out` line on completion.
+(defmodule web-req-log-test
+  (:use web/req-log :only [start-record done-record error-record])
+  (:use main :only [text-line json-line])
+  (:use json :only [json-parse])
+  (:use test))
+
+(defn at (rec)
+  "Stamp a fixed :ts so rendering is byte-for-byte deterministic."
+  (assoc rec :ts 1000))
+
+(def *start* (start-record "r1" "GET" "/"))
+(def *done* (done-record "r1" "GET" "/" 200 4.2 false))
+
+(describe "web/req-log — the 4 log variants (format × combine)"
+  ;; ---- combined: one line per request (the `out` record only) ----
+  (test "text + combined — one human line"
+    (is (= (text-line (at *done*)) "[DEBUG 1000] [r1] GET / -> 200 in 4.2ms\n")))
+  (test "json + combined — one JSON object with flattened fields"
+    (is (= (json-parse (json-line (at *done*)))
+          {:timestamp 1000
+           :level "debug"
+           :message "[r1] GET / -> 200 in 4.2ms"
+           :request_id "r1"
+           :method "GET"
+           :path "/"
+           :status_code 200
+           :duration_ms 4.2
+           :event "request.complete"})))
+
+  ;; ---- separate: an `in` line then an `out` line ----
+  (test "text + separate — in line then out line"
+    (is (= (text-line (at *start*)) "[DEBUG 1000] [r1] GET /\n"))
+    (is (= (text-line (at *done*)) "[DEBUG 1000] [r1] GET / -> 200 in 4.2ms\n")))
+  (test "json + separate — in object then out object"
+    (is (= (json-parse (json-line (at *start*)))
+          {:timestamp 1000
+           :level "debug"
+           :message "[r1] GET /"
+           :request_id "r1"
+           :method "GET"
+           :path "/"
+           :event "request.start"}))
+    (is (= (json-parse (json-line (at *done*)))
+          {:timestamp 1000
+           :level "debug"
+           :message "[r1] GET / -> 200 in 4.2ms"
+           :request_id "r1"
+           :method "GET"
+           :path "/"
+           :status_code 200
+           :duration_ms 4.2
+           :event "request.complete"}))))
+
+(describe "web/req-log — record levels"
+  (test "a slow request's completion is :warn and tagged request.slow"
+    (let (r (done-record "r2" "GET" "/slow" 200 2004.2 true))
+      (is (= (get r :level) :warn))
+      (is (= (get (get r :meta) :event) "request.slow"))))
+  (test "a failed request is :error and carries the error message"
+    (let (r (error-record "r3" "POST" "/pay" 500 3.1 "unbound symbol: inspect"))
+      (is (= (get r :level) :error))
+      (is (= (get (get r :meta) :event) "request.error"))
+      (is (= (get (get r :meta) :error) "unbound symbol: inspect")))))

@@ -1,0 +1,37 @@
+(defmodule web/views/diagnostics
+  "Diagnostic endpoints used while developing the app. `dev-info` is a Basic-auth-gated
+  peek at the authenticated user and request-id; `slow-page` sleeps 2s before responding,
+  to exercise web/req-log's slow-request warning. The router wires both:
+    (through [(auth/basic-auth …)] (get \"/dev\" web/views/diagnostics/dev-info))
+    (get \"/slow\" web/views/diagnostics/slow-page)"
+  ; text-resp / get-assign — dev-info's plain-text response
+  (:use web/conn :only [text-resp get-assign])
+  ; page / layout — slow-page renders a real HTML page through the shared shell
+  (:use web/page)
+  (:use web/layout))
+
+(defn dev-info (conn)
+  "GET /dev — a Basic-auth-gated dev endpoint. The (through …) group runs
+  auth/basic-auth first, so this is reached only once credentials check out; the plug
+  assigns :current-user, which we return."
+  (text-resp conn
+    (str "dev endpoint — authenticated as "
+      (get-assign conn :current-user)
+      "\n"
+      "request-id: "
+      (get-assign conn :request-id))))
+
+(defn slow-page (conn)
+  "GET /slow — sleeps 2s before rendering, so the request outlives web/req-log's 1s
+  deadline: watch the server log show a \"still running after 1s\" :warn while it's in
+  flight, then the paired completion line once this returns."
+  (sleep 2000)
+  (page conn
+    (layout "slow"
+      [:h1 {:class "text-3xl font-bold mb-2"} "Slow page"]
+      [:p {:class "opacity-70"}
+        "This handler slept 2 seconds before responding. Check the server log: req-log "
+        "logs a "
+        [:code {:class "badge badge-ghost"} "still running after 1s"]
+        " warning while the request is in flight, then the paired completion line when "
+        "it returns."])))
