@@ -1,7 +1,7 @@
 (defmodule main
   "Entry point: start logging and boot the web endpoint (which owns its port)."
-  (:use web/endpoint :refer [serve])
-  (:use log :refer [start-logger fn-backend]))
+  (:use web/endpoint :only [serve])
+  (:use log :only [start-logger fn-backend]))
 
 (defn log-level ()
   "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the

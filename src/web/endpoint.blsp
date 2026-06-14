@@ -4,10 +4,10 @@
   router (web/routes), wires the live-view WebSocket handler (web/views/counter),
   and starts the server. `main` just calls `(serve)`."
   (:use http/server)                          ; start
-  (:use web/conn :refer [build])              ; raw request → conn
-  (:use web/routes :refer [app-router])
-  (:use web/views/counter :refer [live-handler])
-  (:use log :refer [log-debug]))              ; per-request logging
+  (:use web/conn :only [build])              ; raw request → conn
+  (:use web/routes :only [app-router])
+  (:use web/views/counter :only [live-handler])
+  (:use log :only [log-debug]))              ; per-request logging
 
 (defn adapter (req)
   "Bridge an http/server raw request → conn → router → http/response map. This is
