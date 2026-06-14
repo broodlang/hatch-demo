@@ -3,10 +3,11 @@
   (3s) server-pushed ticker. This view's own backend logic lives here (not in lib —
   lib is for cross-cutting domain logic). The router maps GET /counter to `show`;
   `live-handler` is the WebSocket handler the endpoint wires in."
-  (:use web/template)   ; html
-  (:use web/conn)       ; html-resp
-  (:use web/live)       ; deflive, ws-handler-for
-  (:use web/layout))    ; layout
+  (:use web/template)        ; html
+  (:use web/conn)            ; html-resp
+  (:use web/live)            ; deflive, ws-handler-for
+  (:use web/layout)          ; layout
+  (:implements LiveView))    ; checked: this module must define mount/render/handle-event
 
 ; ---- this view's backend logic ----
 
