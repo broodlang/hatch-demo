@@ -1,0 +1,46 @@
+;; Tests for the live room (PubSub demo), driven through Hatch's view harness. The model
+;; logic and handle-info are tested as plain functions; the cross-client broadcast itself
+;; is covered by Hatch's web/pubsub tests. We avoid live-mount here so the test process
+;; doesn't actually subscribe to the topic.
+(defmodule web-views-room-view-test
+  ; live-info / live-event / live-render — from the dep
+  (:use web/test)
+  (:alias web/views/room)
+  (:use test))
+
+(describe "room model"
+  (test "init has an id, no events, and zero waves"
+    (let (m (room/init))
+      (assert= (string? (get m :id)) true)
+      (assert= (get m :events) (list))
+      (assert= (get m :waves) 0)))
+  (test "record prepends to the log and bumps the count"
+    (let (m (room/record (room/init) "a waved"))
+      (assert= (get m :waves) 1)
+      (assert= (first (get m :events)) "a waved")))
+  (test "the activity log caps at 8 entries"
+    (let (m (fold (fn (acc i) (room/record acc (str "w" i))) (room/init) (range 12)))
+      (assert= (count (get m :events)) 8))))
+
+(describe "room live view"
+  (test "handle-info records an incoming broadcast"
+    (let (m (live-info (room/live-spec) {:from "xyz"} {:id "me" :events (list) :waves 0}))
+      (assert= (get m :waves) 1)
+      (assert= (includes? (first (get m :events)) "xyz") true)))
+  (test "a wave event returns the model unchanged (the update returns via broadcast)"
+    (let (model {:id "me" :events (list) :waves 0})
+      (assert= (live-event (room/live-spec) "wave" {} model) model)))
+  (test "render shows the visitor id, wave count, and wave button"
+    (let (html (live-render (room/live-spec) {:id "abc" :events (list) :waves 3}))
+      (assert= (includes? html "abc") true)
+      (assert= (includes? html ">3</div>") true)
+      (assert= (includes? html "data-event=\"wave\"") true)))
+  ; The activity log is an opaque dynamic (a (map …) over events) — verify the parts still
+  ; reassemble to the exact full render, with and without entries.
+  (test "minimal-diff parts reassemble to the full render"
+    (let (spec (room/live-spec)
+          m {:id "abc" :events (list "x waved 👋" "y waved 👋") :waves 2})
+      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
+        (live-render spec m))
+      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) {:id "z" :events (list) :waves 0}))
+        (live-render spec {:id "z" :events (list) :waves 0})))))

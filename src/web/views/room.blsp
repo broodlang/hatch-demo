@@ -1,0 +1,71 @@
+(defmodule web/views/room
+  "A real-time room — the PubSub demo. Every connected client subscribes to one topic in
+  `mount`; a click broadcasts to that topic, and every subscriber (all open tabs/clients)
+  receives it via `handle-info` and re-renders. Open this page in two browsers and a wave in
+  one shows up in the other instantly — no polling, no reload. This is the foundation
+  presence builds on. Wired with `(live \"/room\" …)`."
+  ; deflive
+  (:use web/live)
+  ; subscribe / broadcast — the pub/sub primitives
+  (:alias web/pubsub)
+  (:implements LiveModule))
+; ---- backend logic ----
+
+(def topic "room:lobby")
+(def max-events 8)
+
+(defn init ()
+  "A fresh model: a short visitor id for this session, an empty activity log, a wave count."
+  {:id (random-token 3) :events (list) :waves 0})
+
+(defn record (model text)
+  "Prepend `text` to the activity log, capped at max-events, and bump the wave count."
+  (assoc model
+    :events (take max-events (cons text (get model :events)))
+    :waves (inc (get model :waves))))
+
+; ---- live view ----
+
+(deflive
+  ; Subscribe this session to the room topic. mount runs in the session process, so
+  ; (self) — captured by pubsub/subscribe — is this session's pid, the broadcast target.
+  (mount (params) (do (pubsub/subscribe topic) (init)))
+
+  ; A wave doesn't touch the local model directly — it broadcasts to the topic, and the
+  ; broadcast comes back to *every* subscriber (including this one) through handle-info.
+  ; One code path updates everyone, so all clients stay in sync.
+  (on "wave" (params model)
+    (do (pubsub/broadcast topic {:from (get model :id)}) model))
+
+  ; A broadcast arrives here on every subscribed session. `msg` is the payload map passed
+  ; to broadcast (in-process — no JSON), so its keys are keywords.
+  (handle-info (msg model)
+    (record model (str "visitor " (get msg :from) " waved 👋")))
+
+  (render (model)
+    [:div {:data-live "/room" :class "space-y-6"}
+      [:div {:class "prose"}
+        [:h1 {:class "text-2xl font-bold"} "Live room · PubSub"]
+        [:p {:class "opacity-70"}
+          "You are visitor "
+          [:span {:class "badge badge-primary"} (get model :id)]
+          ". Open this page in another tab or browser and wave — every connected client "
+          "updates in real time over the socket."]]
+      [:div {:class "card bg-base-200"}
+        [:div {:class "card-body items-center"}
+          [:div {:class "text-5xl font-bold"} (str (get model :waves))]
+          [:div {:class "stat-desc"} "waves seen in this room"]
+          [:button {:data-event "wave" :class "btn btn-primary btn-lg mt-2"} "Wave 👋"]]]
+      [:div {:class "card bg-base-200"}
+        [:div {:class "card-body"}
+          [:h2 {:class "card-title text-base"} "Recent activity"]
+          (activity-log model)]]]))
+
+; ---- view pieces ----
+
+(defn activity-log (model)
+  (let (events (get model :events))
+    (if (empty? events)
+      [:p {:class "opacity-60"} "No waves yet — be the first."]
+      [:ul {:class "menu p-0"}
+        (map (fn (e) [:li {} [:span {:class "px-2 py-1"} e]]) events)])))

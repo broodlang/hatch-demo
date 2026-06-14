@@ -31,7 +31,9 @@
       (nav-dropdown "Customer"
         [:li {} (nav-link "/counter" "Counter")]
         [:li {} (nav-link "/counter-inline" "Counter (inline)")]
-        [:li {} (nav-link "/signup" "Live form")])
+        [:li {} (nav-link "/signup" "Live form")]
+        [:li {} (nav-link "/room" "Live room")]
+        [:li {} (nav-link "/presence" "Live presence")])
       (nav-dropdown "Admin"
         [:li {} (nav-link "/admin/counter" "Counter")]
         [:li {} (nav-link "/admin/counter-inline" "Counter (inline)")])
@@ -42,8 +44,15 @@
       [:a {:href "/slow" :data-nav true :class "btn btn-ghost btn-sm"} "Slow"]
       [:a {:href "/dev" :data-nav true :class "btn btn-ghost btn-sm"} "Dev"]]])
 
+; The navbar is identical on every page, so render it to HTML once at load and inject the
+; cached string with `raw` — the bulk of a page's render time was re-walking this static
+; tree per request. Reloading this module (dev hot-reload) recomputes it.
+(def *nav-html* (render (nav-bar)))
+
 (defn layout (title & children)
-  "The shared page shell: daisyUI navbar on top, page content in a centered <main>."
+  "The shared page shell: daisyUI navbar on top, page content in a centered <main>. The
+  navbar is the pre-rendered `*nav-html*` (it never varies); only `title` and `children`
+  are rendered per request."
   [:html {:data-theme "light"}
     [:head {}
       [:meta {:charset "utf-8"}]
@@ -51,5 +60,5 @@
       [:title {} title]
       (stylesheet "/static/app.css")]
     [:body {:class "min-h-screen bg-base-100 text-base-content"}
-      (nav-bar)
+      (raw *nav-html*)
       [:main {:class "max-w-3xl mx-auto p-6"} children]]])

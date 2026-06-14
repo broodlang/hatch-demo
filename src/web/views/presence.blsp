@@ -1,0 +1,56 @@
+(defmodule web/views/presence
+  "A live presence view — the Presence demo. Each session `track`s itself on a topic in
+  mount; the registry pushes the updated roster to every present member, so the list of
+  who's here updates live as tabs open and close. Open this in several tabs and watch the
+  count change; close one and it drops within moments (the dropped socket's session dies and
+  Presence auto-removes it). Wired with `(live \"/presence\" …)`."
+  ; deflive
+  (:use web/live)
+  ; track / roster — presence primitives
+  (:alias web/presence)
+  (:implements LiveModule))
+
+(def topic "presence:lobby")
+
+(defn member-keys (model)
+  "The visitor ids currently present, from the model's roster."
+  (map (fn (m) (get m :key)) (get model :members (list))))
+
+(deflive
+  ; Track this session under a short visitor id, then seed the roster synchronously (the
+  ; `roster` call runs after `track`, so it already includes us).
+  (mount (params)
+    (let (id (random-token 3))
+      (presence/track topic id {})
+      {:id id :members (presence/roster topic)}))
+
+  ; Presence pushes {:presence roster} whenever someone joins or leaves — refresh the list.
+  (handle-info (msg model)
+    (if (contains? msg :presence)
+      (assoc model :members (get msg :presence))
+      model))
+
+  (render (model)
+    [:div {:data-live "/presence" :class "space-y-6"}
+      [:div {:class "prose"}
+        [:h1 {:class "text-2xl font-bold"} "Live presence · who's here"]
+        [:p {:class "opacity-70"}
+          "You are visitor "
+          [:span {:class "badge badge-primary"} (get model :id)]
+          ". Open this page in more tabs and the list grows; close one and it drops — no "
+          "polling, the roster is pushed over the socket."]]
+      [:div {:class "card bg-base-200"}
+        [:div {:class "card-body items-center"}
+          [:div {:class "text-5xl font-bold"} (str (count (member-keys model)))]
+          [:div {:class "stat-desc"} "here right now"]
+          (roster-list model)]]]))
+
+(defn roster-list (model)
+  (let (keys (member-keys model))
+    [:ul {:class "menu p-0 w-full"}
+      (map (fn (k)
+             [:li {}
+               [:span {:class "px-2 py-1"}
+                 (str "visitor " k)
+                 (if (= k (get model :id)) [:span {:class "badge badge-sm ml-2"} "you"] "")]])
+        keys)]))

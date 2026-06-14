@@ -21,12 +21,12 @@
 (describe "web/req-log — the 4 log variants (format × combine)"
   ;; ---- combined: one line per request (the `out` record only) ----
   (test "text + combined — one human line"
-    (is (= (text-line (at *done*)) "[DEBUG 1000] [r1] GET / -> 200 in 4.2ms\n")))
+    (is (= (text-line (at *done*)) "[DEBUG] [r1] GET / 200 4.2ms\n")))
   (test "json + combined — one JSON object with flattened fields"
     (is (= (json-parse (json-line (at *done*)))
           {:timestamp 1000
            :level "debug"
-           :message "[r1] GET / -> 200 in 4.2ms"
+           :message "[r1] GET / 200 4.2ms"
            :request_id "r1"
            :method "GET"
            :path "/"
@@ -36,8 +36,8 @@
 
   ;; ---- separate: an `in` line then an `out` line ----
   (test "text + separate — in line then out line"
-    (is (= (text-line (at *start*)) "[DEBUG 1000] [r1] GET /\n"))
-    (is (= (text-line (at *done*)) "[DEBUG 1000] [r1] GET / -> 200 in 4.2ms\n")))
+    (is (= (text-line (at *start*)) "[DEBUG] [r1] GET /\n"))
+    (is (= (text-line (at *done*)) "[DEBUG] [r1] GET / 200 4.2ms\n")))
   (test "json + separate — in object then out object"
     (is (= (json-parse (json-line (at *start*)))
           {:timestamp 1000
@@ -50,7 +50,7 @@
     (is (= (json-parse (json-line (at *done*)))
           {:timestamp 1000
            :level "debug"
-           :message "[r1] GET / -> 200 in 4.2ms"
+           :message "[r1] GET / 200 4.2ms"
            :request_id "r1"
            :method "GET"
            :path "/"
