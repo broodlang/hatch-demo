@@ -7,7 +7,8 @@
   (:use web/conn)  ; text-resp
   (:use web/layout)  ; layout — the (live …) clause builds its mount page with it
   (:alias web/static)  ; static/handler  — safe static file serving
-  (:alias web/live))  ; live/client-js-handler — serve brood_live.js from hatch
+  (:alias web/live)  ; live/client-js-handler — serve brood_live.js from hatch
+  (:alias web/auth))  ; auth/basic-auth — the dev endpoint's Basic-auth plug
 
 ; The framework's live-view client, served straight from the hatch package — no
 ; vendored copy in this app's static/ dir. App-owned assets go under ./static and are
@@ -33,15 +34,34 @@
       "Body:    "
       (get conn :body))))
 
+(defn dev-info (conn)
+  "GET /dev — a Basic-auth-gated dev endpoint. The (through …) group runs
+  auth/basic-auth first, so this is reached only once credentials check out; the plug
+  assigns :current-user, which we echo back."
+  (text-resp conn
+    (str "dev endpoint — authenticated as " (get-assign conn :current-user) "\n"
+      "request-id: " (get-assign conn :request-id))))
+
 (defrouter app-router
   (get "/" web/views/home/index)
+  ; A pipeline/middleware group: every route inside runs through the listed plugs
+  ; first. basic-auth halts with a 401 challenge until the browser sends admin:admin,
+  ; so /dev is gated without the handler knowing anything about auth.
+  (through [(auth/basic-auth "admin" "admin" "hatch-demo dev")]
+    (get "/dev" dev-info))
   ; Plain pages (web/page): inline Hiccup vs a .bml template.
   (get "/page-inline" web/views/page-inline/index)
   (get "/page-template" web/views/page-template/index)
   ; Live views (web/live): inline render vs a .bml template. Each (live …) clause
   ; auto-generates the GET mount page + registers the WebSocket dispatch.
+  (live-session "admin"
+      (live "/counter-inline" web/views/counter-inline)
+    (live "/counter" web/views/counter))
+
+(live-session "customer"
   (live "/counter-inline" web/views/counter-inline)
-  (live "/counter" web/views/counter)
+  (live "/counter" web/views/counter))
+
   (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
   (any "/echo" echo-page)
   (get "/static/brood_live.js" serve-live-js)  ; specific route wins over the splat
