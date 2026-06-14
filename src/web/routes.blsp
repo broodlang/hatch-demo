@@ -1,9 +1,10 @@
 (defmodule web/routes
-  "The demo's HTTP routes and the raw-request → response adapter. Pages live in
-  web/views/demo; this module just maps paths to handlers and bridges the server.
+  "The demo's HTTP routes: a server-agnostic `path → handler` table. Each handler
+  takes a conn and returns a response; nothing here knows about the raw server
+  format — that bridge lives in web/endpoint. Pages live in web/views/demo.
   (Named web/routes, not web/router — the framework owns the `web/router` module.)"
   (:use web/router)   ; defrouter, dispatch
-  (:use web/conn))    ; build, text-resp, not-found-resp
+  (:use web/conn))    ; text-resp, not-found-resp
 
 ; ---- infrastructure handlers ----
 
@@ -38,11 +39,3 @@
   (get "/counter"   web/views/demo/counter-page)
   (any "/echo"      echo-page)
   (get "/static/:_" serve-static))
-
-(defn adapter (req)
-  "Bridge an http/server raw request → conn → router → http/response map."
-  (let (conn (build req)
-        resp (app-router conn))
-    {:status  (get resp :status 200)
-     :headers (get resp :headers {})
-     :body    (get resp :body "")}))
