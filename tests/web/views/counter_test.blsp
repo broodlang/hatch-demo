@@ -1,8 +1,8 @@
-;; Unit tests for src/lib/counter.blsp — the test tree mirrors the source tree.
-;; Pure logic, so no server is needed.
-(defmodule lib-counter-test (:use lib/counter) (:use test))
+;; Unit tests for the counter view's backend logic. Mirrors
+;; src/web/views/counter.blsp.
+(defmodule web-views-counter-test (:use web/views/counter) (:use test))
 
-(describe "lib/counter"
+(describe "web/views/counter logic"
   (test "init seeds the click count and zeroes both tickers"
     (is (= (init 5) {:count 5 :fast 0 :slow 0})))
   (test "increment / decrement move only the click count"

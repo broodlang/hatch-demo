@@ -35,7 +35,7 @@
 ; ---- routing table ----
 
 (defrouter app-router
-  (get "/"          web/views/demo/home-page)
-  (get "/counter"   web/views/demo/counter-page)
+  (get "/"          web/views/home/index)
+  (get "/counter"   web/views/counter/show)
   (any "/echo"      echo-page)
   (get "/static/:_" serve-static))

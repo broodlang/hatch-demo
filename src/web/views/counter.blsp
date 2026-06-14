@@ -1,0 +1,65 @@
+(defmodule web/views/counter
+  "The counter page and its live view: a click counter plus a fast (1s) and slow
+  (3s) server-pushed ticker. This view's own backend logic lives here (not in lib —
+  lib is for cross-cutting domain logic). The router maps GET /counter to `show`;
+  `live-handler` is the WebSocket handler the endpoint wires in."
+  (:use web/template)   ; html
+  (:use web/conn)       ; html-resp
+  (:use web/live)       ; deflive, ws-handler-for
+  (:use web/layout))    ; layout
+
+; ---- this view's backend logic ----
+
+(defn init (start)
+  "A fresh model: click count `start`, plus two tickers at 0."
+  {:count start :fast 0 :slow 0})
+
+(defn increment (model) (assoc model :count (inc (get model :count))))
+(defn decrement (model) (assoc model :count (dec (get model :count))))
+(defn bump (model k)    (assoc model k (inc (get model k))))
+
+; ---- page (conn → response) ----
+
+(defn show (c)
+  "GET /counter — the page shell; the live view replaces it once the socket opens."
+  (html-resp c (html (layout "Counter"
+                       [:div {:data-live "/counter"
+                              :style "font-family:sans-serif;padding:2rem"}
+                        [:p {} "Connecting…"]]))))
+
+; ---- live view ----
+
+(deflive
+  (mount (params)
+    (init (string->number (get params "start" "0"))))
+
+  (render (model)
+    [:div {:data-live "/counter" :style "font-family:sans-serif;padding:2rem"}
+     [:section {:style "margin-bottom:2rem"}
+      [:h2 {} "Click counter 2"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :count))]
+      [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
+      [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
+     [:section {:style "margin-bottom:2rem"}
+      [:h2 {} "Fast ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :fast))]
+      [:p {:style "color:#888"} "server pushes +1 every second"]]
+     [:section {}
+      [:h2 {} "Slow ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :slow))]
+      [:p {:style "color:#888"} "server pushes +1 every three seconds"]]])
+
+  (on "increment" (params model)
+    (increment model))
+
+  (on "decrement" (params model)
+    (decrement model))
+
+  (tick 1000 (model)
+    (bump model :fast))
+
+  (tick 3000 (model)
+    (bump model :slow)))
+
+(def live-handler
+  (ws-handler-for mount render handle-event live-ticks handle-tick))

@@ -6,7 +6,7 @@
   (:use http/server)                          ; start
   (:use web/conn :refer [build])              ; raw request → conn
   (:use web/routes :refer [app-router])
-  (:use web/views/demo :refer [live-handler])
+  (:use web/views/counter :refer [live-handler])
   (:use log :refer [log-debug]))              ; per-request logging
 
 (defn adapter (req)
