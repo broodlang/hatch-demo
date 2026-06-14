@@ -1,0 +1,36 @@
+;; Tests for the keyed-morph test view. The reorder logic and render are checked here; the
+;; actual focus-preserving DOM morph is a browser behaviour (verify by typing in a box at
+;; /reorder and watching the row move under you).
+(defmodule web-views-reorder-view-test
+  (:use web/test)
+  (:alias web/views/reorder)
+  (:use test))
+
+(describe "reorder model"
+  (test "rotate moves the first item to the end"
+    (assert= (reorder/rotate (list {:id "a"} {:id "b"} {:id "c"}))
+      (list {:id "b"} {:id "c"} {:id "a"})))
+  (test "rotate of empty is empty"
+    (assert= (reorder/rotate (list)) (list)))
+  (test "init has four keyed rows"
+    (assert= (count (get (reorder/init) :items)) 4)))
+
+(describe "reorder live view"
+  (test "a tick rotates the rows"
+    (let (spec (reorder/live-spec)
+          m0 (live-mount spec {})
+          m1 (live-tick spec 3000 m0))
+      (assert= (get (first (get m1 :items)) :id) "linus")))
+  (test "the rotate event rotates the rows"
+    (let (spec (reorder/live-spec)
+          m (live-event spec "rotate" {} (live-mount spec {})))
+      (assert= (get (first (get m :items)) :id) "linus")))
+  (test "render keys each row with data-key (so the client can morph by key)"
+    (let (html (live-render (reorder/live-spec) (live-mount (reorder/live-spec) {})))
+      (assert= (includes? html "data-key=\"ada\"") true)
+      (assert= (includes? html "data-key=\"alan\"") true)))
+  (test "minimal-diff parts reassemble to the full render"
+    (let (spec (reorder/live-spec)
+          m (live-mount spec {}))
+      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
+        (live-render spec m)))))

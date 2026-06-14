@@ -54,7 +54,9 @@
     ; A real-time room: PubSub broadcast across all connected clients.
     (live "/room" web/views/room)
     ; Live presence: who's-here roster that updates as clients join/leave.
-    (live "/presence" web/views/presence))
+    (live "/presence" web/views/presence)
+    ; Keyed-morph test: a list that reorders under live inputs, keeping their focus.
+    (live "/reorder" web/views/reorder))
   (live-session "admin"
     (live "/admin/counter" web/views/counter)
     (live "/admin/counter-inline" web/views/counter-inline))

@@ -1,0 +1,49 @@
+(defmodule web/views/reorder
+  "A test page for keyed DOM morphing. The list reorders every few seconds (and on the
+  button); each row carries a stable `data-key` and holds a text `<input>`. Type into a box
+  and watch the row move under you — with keyed morphing the client MOVES the existing input
+  node, so your focus, caret, and typed text ride along; without keys the input would be
+  rebuilt at its new index and you'd lose all three. Wired with `(live \"/reorder\" …)`."
+  ; deflive
+  (:use web/live)
+  (:implements LiveModule))
+
+(defn init ()
+  "Four rows, each with a stable id used as the morph key."
+  {:items (list {:id "ada" :name "Ada"}
+            {:id "linus" :name "Linus"}
+            {:id "grace" :name "Grace"}
+            {:id "alan" :name "Alan"})})
+
+(defn rotate (items)
+  "Move the first item to the end — a reorder that shifts every row's position."
+  (if (empty? items) items (concat (rest items) (list (first items)))))
+
+(deflive
+  (mount (params) (init))
+
+  ; A server-driven reorder every 3s — no click, so it fires while you're typing in a box,
+  ; which is exactly when focus preservation matters.
+  (tick 3000 (model) (assoc model :items (rotate (get model :items))))
+
+  (on "rotate" (params model) (assoc model :items (rotate (get model :items))))
+
+  (render (model)
+    [:div {:data-live "/reorder" :class "space-y-6"}
+      [:div {:class "prose"}
+        [:h1 {:class "text-2xl font-bold"} "Keyed morph · focus survives reorder"]
+        [:p {:class "opacity-70"}
+          "This list reorders every 3 seconds. Click into a box and start typing — with "
+          "keyed DOM morphing your cursor and text stay put as the row moves. Each row is "
+          "keyed by a stable "
+          [:code {:class "badge badge-ghost"} "data-key"]
+          "."]]
+      [:button {:data-event "rotate" :class "btn btn-sm"} "Rotate now"]
+      [:div {:class "space-y-2"}
+        (map (fn (it)
+               [:div {:data-key (get it :id)
+                      :class "flex items-center gap-3 card bg-base-200 p-3"}
+                 [:span {:class "badge badge-primary w-20"} (get it :name)]
+                 [:input {:placeholder "type here — keep focus through a reorder…"
+                          :class "input input-bordered input-sm flex-1"}]])
+          (get model :items))]]))
