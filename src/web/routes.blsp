@@ -15,28 +15,28 @@
 (def serve-live-js (live/client-js-handler))
 (def serve-assets (static/handler "static"))
 
-(defn echo-page (c)
+(defn echo-page (conn)
   "ANY /echo — reflect the request back as plain text."
-  (text-resp c
+  (text-resp conn
     (str "Method:  "
-      (get c :method)
+      (get conn :method)
       "\n"
       "Path:    "
-      (get c :path)
+      (get conn :path)
       "\n"
       "Query:   "
-      (get c :query)
+      (get conn :query)
       "\n"
       "Headers: "
-      (pr-str (get c :headers))
+      (pr-str (get conn :headers))
       "\n"
       "Body:    "
-      (get c :body))))
+      (get conn :body))))
 
 (defrouter app-router
   (get "/" web/views/home/index)
   (live "/counter" web/views/counter)  ; auto GET mount-page + WS dispatch
-  (get "/hello" (fn (c) (pr-str c)))   ; pr-str dumps the conn; string → 200 body
+  (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
   (any "/echo" echo-page)
   (get "/static/brood_live.js" serve-live-js)  ; specific route wins over the splat
   (get "/static/*path" serve-assets))

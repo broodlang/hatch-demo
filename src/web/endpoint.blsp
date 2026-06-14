@@ -9,14 +9,14 @@
   (:alias web/live)  ; live/live-dispatcher — routes WS upgrades by path
   (:alias log))  ; log/log-debug, log/log-error — per-request logging
 
-(defn adapter (req)
+(defn adapter (request)
   "Bridge an http/server raw request → conn → router → http/response map. The router
   and handlers work in conns end to end; `conn->response` serializes the final conn
   for http/server. A normal request is logged at :debug (method, path, status); a
   handler that raises is logged at :error (with the failure) and answered with a 500,
   so an error like `unbound symbol: inspect` shows up in the logs instead of vanishing
   into the response body."
-  (let (conn (conn/build req))
+  (let (conn (conn/build request))
     (try
       (let (resp (conn/conn->response (routes/app-router conn)))
         (log/log-debug (str (get conn :method) " " (get conn :path) " -> " (get resp :status)))

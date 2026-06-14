@@ -1,0 +1,18 @@
+<div data-live="/counter" style="font-family:sans-serif;padding:2rem">
+  <section style="margin-bottom:2rem">
+    <h2>Click counter</h2>
+    <p style="font-size:3rem;margin:.5rem 0">{(get model :count)}</p>
+    <button data-event="decrement" style="font-size:1.5rem;margin-right:.5rem">−</button>
+    <button data-event="increment" style="font-size:1.5rem">+</button>
+  </section>
+  <section style="margin-bottom:2rem">
+    <h2>Fast ticker</h2>
+    <p style="font-size:3rem;margin:.5rem 0">{(get model :fast)}</p>
+    <p style="color:#888">server pushes +1 every second</p>
+  </section>
+  <section>
+    <h2>Slow ticker</h2>
+    <p style="font-size:3rem;margin:.5rem 0">{(get model :slow)}</p>
+    <p style="color:#888">server pushes +1 every three seconds</p>
+  </section>
+</div>
