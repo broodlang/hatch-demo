@@ -8,15 +8,29 @@
 
 ; ---- page layout ----
 
+; A subtle top-right pill that appears only when a live view loses its socket.
+; brood_live.js toggles `brood-disconnected` on <html>; the 1s transition delay
+; means a normal (fast) initial connect or a brief blip never flashes it.
+(def *status-css*
+  (str ".brood-status{position:fixed;top:.75rem;right:.75rem;z-index:9999;"
+       "font:13px/1 sans-serif;background:#b91c1c;color:#fff;padding:.35rem .7rem;"
+       "border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s ease;transition-delay:1s}"
+       "html.brood-disconnected .brood-status{opacity:.95;transition-delay:1s}"
+       "html.brood-connected .brood-status{opacity:0;transition-delay:0s}"))
+
 (defn layout (title & children)
-  "The HTML chrome shared by every page (loads the live-view client)."
+  "The HTML chrome shared by every page (loads the live-view client + the
+  connection-status indicator)."
   [:html {}
    [:head {}
     [:meta {:charset "utf-8"}]
     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
     [:title {} title]
+    [:style {} *status-css*]
     [:script {:src "/static/brood_live.js" :defer true}]]
-   [:body {} children]])
+   [:body {}
+    [:div {:class "brood-status"} "● reconnecting…"]
+    children]])
 
 ; ---- pages (conn → response) ----
 
