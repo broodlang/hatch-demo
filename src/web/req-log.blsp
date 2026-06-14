@@ -55,7 +55,7 @@
   "The `out` record for a successful request: `[rid] METHOD path -> <status> in <ms>ms`.
   At :warn / `request.slow` when `slow?` (it overran the deadline), else :debug."
   {:level (if slow? :warn :debug)
-   :msg (str (req-log--head rid method path) " -> " status " in " ms "ms")
+   :msg (str (req-log--head rid method path) " " status " " ms "ms")
    :meta (merge (req-log--base rid method path)
            {:status_code status
             :duration_ms ms
@@ -64,7 +64,7 @@
 (defn error-record (rid method path status ms err)
   "The `out` record for a failed request: `… -> <status> in <ms>ms (<err>)` at :error."
   {:level :error
-   :msg (str (req-log--head rid method path) " -> " status " in " ms "ms (" err ")")
+   :msg (str (req-log--head rid method path) " " status " " ms "ms (" err ")")
    :meta (merge (req-log--base rid method path)
            {:status_code status :duration_ms ms :error err :event "request.error"})})
 
@@ -72,7 +72,7 @@
   "The `request.pending` :warn record the watchdog logs when a request is still in flight
   at the deadline."
   {:level :warn
-   :msg (str (req-log--head rid method path) " -> pending after " req-log--deadline)
+   :msg (str (req-log--head rid method path) " pending after " req-log--deadline)
    :meta (merge (req-log--base rid method path)
            {:event "request.pending" :after_ms req-log--timeout-ms})})
 

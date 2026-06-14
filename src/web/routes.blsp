@@ -47,7 +47,11 @@
     (live "/counter" web/views/counter)
     (live "/counter-inline" web/views/counter-inline)
     ; A live form with as-you-type validation feedback over the socket.
-    (live "/signup" web/views/signup))
+    (live "/signup" web/views/signup)
+    ; A real-time room: PubSub broadcast across all connected clients.
+    (live "/room" web/views/room)
+    ; Live presence: who's-here roster that updates as clients join/leave.
+    (live "/presence" web/views/presence))
   (live-session "admin"
     (live "/admin/counter" web/views/counter)
     (live "/admin/counter-inline" web/views/counter-inline))

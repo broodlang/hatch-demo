@@ -1,0 +1,31 @@
+;; Tests for the live presence view, driven through Hatch's view harness. handle-info and
+;; render are tested as plain functions on constructed models; the cross-client roster push
+;; itself is covered by Hatch's web/presence tests. We avoid live-mount so the test process
+;; doesn't actually track itself on the topic.
+(defmodule web-views-presence-view-test
+  ; live-info / live-render — from the dep
+  (:use web/test)
+  (:alias web/views/presence)
+  (:use test))
+
+(def *roster* (list {:key "abc" :meta {}} {:key "xyz" :meta {}}))
+
+(describe "presence live view"
+  (test "a presence push replaces the member roster"
+    (let (m (live-info (presence/live-spec) {:presence *roster*} {:id "abc" :members (list)}))
+      (assert= (get m :members) *roster*)))
+  (test "a non-presence message leaves the model unchanged"
+    (let (model {:id "abc" :members *roster*})
+      (assert= (live-info (presence/live-spec) {:other "thing"} model) model)))
+  (test "member-keys lists the present visitor ids"
+    (assert= (presence/member-keys {:id "abc" :members *roster*}) (list "abc" "xyz"))))
+
+(describe "presence render"
+  (test "shows the current count and visitor ids"
+    (let (html (live-render (presence/live-spec) {:id "abc" :members *roster*}))
+      (assert= (includes? html ">2</div>") true)
+      (assert= (includes? html "visitor abc") true)
+      (assert= (includes? html "visitor xyz") true)))
+  (test "marks the current visitor as you"
+    (let (html (live-render (presence/live-spec) {:id "abc" :members *roster*}))
+      (assert= (includes? html "you") true))))
