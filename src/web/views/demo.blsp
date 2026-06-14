@@ -1,0 +1,65 @@
+(defmodule web/views/demo
+  "Demo views: the page layout, the home + counter pages, and the live counter
+  view (click counter + a server-pushed ticker). `live-handler` is the WebSocket
+  handler the router wires into the server."
+  (:use web/template)   ; html, hiccup
+  (:use web/conn)       ; html-resp
+  (:use web/live))      ; deflive, ws-handler-for
+
+; ---- page layout ----
+
+(defn layout (title & children)
+  "The HTML chrome shared by every page (loads the live-view client)."
+  [:html {}
+   [:head {}
+    [:meta {:charset "utf-8"}]
+    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+    [:title {} title]
+    [:script {:src "/static/brood_live.js" :defer true}]]
+   [:body {} children]])
+
+; ---- pages (conn → response) ----
+
+(defn home-page (c)
+  (html-resp c (html (layout "hatch"
+                       [:h1 {} "Hello from Brood"]
+                       [:p {} "A web server written in pure Brood."]
+                       [:ul {}
+                        [:li {} [:a {:href "/counter"} "Live counter"]]
+                        [:li {} [:a {:href "/echo"} "Echo"]]]))))
+
+(defn counter-page (c)
+  (html-resp c (html (layout "Counter"
+                       [:div {:data-live "/counter"
+                              :style "font-family:sans-serif;padding:2rem"}
+                        [:p {} "Connecting…"]]))))
+
+; ---- live view: a click counter + a server-ticked counter ----
+
+(deflive
+  (mount (params)
+    (lib/counter/init (string->number (get params "start" "0"))))
+
+  (render (model)
+    [:div {:data-live "/counter" :style "font-family:sans-serif;padding:2rem"}
+     [:section {:style "margin-bottom:2rem"}
+      [:h2 {} "Click counter"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :count))]
+      [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
+      [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
+     [:section {}
+      [:h2 {} "Auto ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :ticks))]
+      [:p {:style "color:#888"} "increments every second, pushed by the server"]]])
+
+  (on "increment" (params model)
+    (lib/counter/increment model))
+
+  (on "decrement" (params model)
+    (lib/counter/decrement model))
+
+  (tick 1000 (model)
+    (lib/counter/tick model)))
+
+(def live-handler
+  (ws-handler-for mount render handle-event live-tick-ms handle-tick))

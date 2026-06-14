@@ -1,0 +1,12 @@
+;; Unit tests for the pure counter logic — no server needed, the payoff of
+;; keeping domain logic in src/lib/.
+(defmodule lib-counter-test (:use lib/counter) (:use test))
+
+(describe "lib/counter"
+  (test "init seeds the click count and zeroes the ticker"
+    (is (= (init 5) {:count 5 :ticks 0})))
+  (test "increment / decrement move only the click count"
+    (is (= (increment {:count 0 :ticks 9}) {:count 1 :ticks 9}))
+    (is (= (decrement {:count 0 :ticks 9}) {:count -1 :ticks 9})))
+  (test "tick moves only the ticker"
+    (is (= (tick {:count 3 :ticks 0}) {:count 3 :ticks 1}))))

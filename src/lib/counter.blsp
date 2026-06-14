@@ -1,0 +1,19 @@
+(defmodule lib/counter
+  "Pure counter logic — the demo's domain layer. No HTTP, no HTML, no sockets:
+  just the model and the operations on it, so it's unit-testable on its own.")
+
+(defn init (start)
+  "A fresh counter model: click count `start`, tick count 0."
+  {:count start :ticks 0})
+
+(defn increment (model)
+  "Bump the click counter."
+  (assoc model :count (inc (get model :count))))
+
+(defn decrement (model)
+  "Drop the click counter."
+  (assoc model :count (dec (get model :count))))
+
+(defn tick (model)
+  "Advance the auto-ticker (called once per second by the live view)."
+  (assoc model :ticks (inc (get model :ticks))))
