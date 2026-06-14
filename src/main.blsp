@@ -21,20 +21,29 @@
 
 (deflive
   (mount (params)
-    {:count (string->number (get params "start" "0"))})
+    {:count (string->number (get params "start" "0"))
+     :ticks 0})
 
   (render (model)
     [:div {:data-live "/counter" :style "font-family:sans-serif;padding:2rem"}
-     [:h1 {} "Counter"]
-     [:p {:style "font-size:3rem;margin:1rem 0"} (str (get model :count))]
-     [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
-     [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]])
+     [:section {:style "margin-bottom:2rem"}
+      [:h2 {} "Click counter"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :count))]
+      [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
+      [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
+     [:section {}
+      [:h2 {} "Auto ticker"]
+      [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :ticks))]
+      [:p {:style "color:#888"} "increments every second, pushed by the server"]]])
 
   (on "increment" (params model)
     (assoc model :count (inc (get model :count))))
 
   (on "decrement" (params model)
-    (assoc model :count (dec (get model :count)))))
+    (assoc model :count (dec (get model :count))))
+
+  (tick 1000 (model)
+    (assoc model :ticks (inc (get model :ticks)))))
 
 ; ---- static file handler ----
 
@@ -87,7 +96,7 @@
 ; ---- WebSocket handler ----
 
 (def *live-ws-handler*
-  (ws-handler-for mount render handle-event))
+  (ws-handler-for mount render handle-event live-tick-ms handle-tick))
 
 (defn port ()
   "The port to listen on: $HATCH_PORT if set (and numeric), else 5000."
