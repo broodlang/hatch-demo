@@ -36,7 +36,7 @@
   (render (model)
     [:div {:data-live "/counter" :style "font-family:sans-serif;padding:2rem"}
      [:section {:style "margin-bottom:2rem"}
-      [:h2 {} "Click counter 3"]
+      [:h2 {} "Click counter"]
       [:p {:style "font-size:3rem;margin:.5rem 0"} (str (get model :count))]
       [:button {:data-event "decrement" :style "font-size:1.5rem;margin-right:.5rem"} "−"]
       [:button {:data-event "increment" :style "font-size:1.5rem"} "+"]]
