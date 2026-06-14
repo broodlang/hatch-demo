@@ -1,13 +1,28 @@
 (defmodule web/endpoint
   "The endpoint — the boundary between the web server and the app, à la Phoenix's
-  Endpoint. It owns this server's port, bridges raw http/server requests into the
-  router (web/routes), wires the live-view WebSocket dispatcher, and starts the
-  server. `main` just calls `(serve)`."
+  Endpoint. It owns this server's port, serves static assets, bridges raw http/server
+  requests into the router (web/routes), wires the live-view WebSocket dispatcher, and
+  starts the server. `main` just calls `(serve)`."
   (:alias http/server)  ; server/start
   (:alias web/conn)  ; conn/build, conn/conn->response
   (:alias web/routes)  ; routes/app-router (its (live …) clauses register views)
-  (:alias web/live)  ; live/live-dispatcher — routes WS upgrades by path
+  (:alias web/live)  ; live/live-dispatcher (WS), live/client-js-handler (the client)
+  (:alias web/static)  ; static/serve — app assets under ./static
   (:alias log))  ; log/log-debug, log/log-error — per-request logging
+
+; Static serving runs in the endpoint, before the router (Phoenix's Plug.Static
+; shape): the framework's live-view client straight from the hatch package, and the
+; app's own assets under ./static. Built once and reused.
+(def serve-client-js (live/client-js-handler))
+
+(defn static-response (conn)
+  "A response conn for a static request — the live-view client or an app asset under
+  /static — or nil when `conn` isn't static, so the adapter falls through to the router."
+  (let (path (get conn :path))
+    (cond
+      (= path "/static/brood_live.js") (serve-client-js conn)
+      (starts-with? path "/static/") (static/serve conn "static" (substring path 8 (string-length path)))
+      else nil)))
 
 (defn adapter (request)
   "Bridge an http/server raw request → conn → router → http/response map. The router
@@ -25,7 +40,7 @@
         pre (str "[" rid "] " (get conn :method) " " (get conn :path))
         start (now-ns))
     (try
-      (let (resp (conn/conn->response (routes/app-router conn))
+      (let (resp (conn/conn->response (or (static-response conn) (routes/app-router conn)))
             ms (round-to (/ (- (now-ns) start) 1000000.0) 2))
         (log/log-debug (str pre " -> " (get resp :status)))
         ;; second entry, once the response is built: how long the render took
