@@ -1,0 +1,48 @@
+(defmodule web/routes
+  "The demo's HTTP routes and the raw-request → response adapter. Pages live in
+  web/views/demo; this module just maps paths to handlers and bridges the server.
+  (Named web/routes, not web/router — the framework owns the `web/router` module.)"
+  (:use web/router)   ; defrouter, dispatch
+  (:use web/conn))    ; build, text-resp, not-found-resp
+
+; ---- infrastructure handlers ----
+
+(defn serve-static (conn)
+  "Serve a file from ./static relative to the working directory."
+  (let (path    (get conn :path)
+        relpath (str "." path)
+        body    (try (slurp relpath) (catch _ nil)))
+    (if (nil? body)
+      (not-found-resp conn "<h1>404 Not Found</h1>")
+      (let (ct (cond
+                 (ends-with? path ".js")   "application/javascript"
+                 (ends-with? path ".css")  "text/css"
+                 (ends-with? path ".html") "text/html"
+                 else                      "application/octet-stream"))
+        {:status 200
+         :headers {:content-type ct}
+         :body body}))))
+
+(defn echo-page (c)
+  (text-resp c
+    (str "Method:  " (get c :method) "\n"
+         "Path:    " (get c :path) "\n"
+         "Query:   " (get c :query) "\n"
+         "Headers: " (pr-str (get c :headers)) "\n"
+         "Body:    " (get c :body))))
+
+; ---- routing table ----
+
+(defrouter app-router
+  (get "/"          web/views/demo/home-page)
+  (get "/counter"   web/views/demo/counter-page)
+  (any "/echo"      echo-page)
+  (get "/static/:_" serve-static))
+
+(defn adapter (req)
+  "Bridge an http/server raw request → conn → router → http/response map."
+  (let (conn (build req)
+        resp (app-router conn))
+    {:status  (get resp :status 200)
+     :headers (get resp :headers {})
+     :body    (get resp :body "")}))
