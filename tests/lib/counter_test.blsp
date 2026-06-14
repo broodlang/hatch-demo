@@ -1,0 +1,13 @@
+;; Unit tests for src/lib/counter.blsp — the test tree mirrors the source tree.
+;; Pure logic, so no server is needed.
+(defmodule lib-counter-test (:use lib/counter) (:use test))
+
+(describe "lib/counter"
+  (test "init seeds the click count and zeroes both tickers"
+    (is (= (init 5) {:count 5 :fast 0 :slow 0})))
+  (test "increment / decrement move only the click count"
+    (is (= (increment {:count 0 :fast 9 :slow 2}) {:count 1 :fast 9 :slow 2}))
+    (is (= (decrement {:count 0 :fast 9 :slow 2}) {:count -1 :fast 9 :slow 2})))
+  (test "bump advances only the named ticker key"
+    (is (= (bump {:count 3 :fast 0 :slow 0} :fast) {:count 3 :fast 1 :slow 0}))
+    (is (= (bump {:count 3 :fast 0 :slow 0} :slow) {:count 3 :fast 0 :slow 1}))))
