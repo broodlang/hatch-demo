@@ -6,15 +6,10 @@
   (:use web/router)  ; defrouter
   (:use web/conn)  ; text-resp
   (:use web/layout)  ; layout — the (live …) clause builds its mount page with it
-  (:alias web/static)  ; static/handler  — safe static file serving
-  (:alias web/live)  ; live/client-js-handler — serve brood_live.js from hatch
   (:alias web/auth))  ; auth/basic-auth — the dev endpoint's Basic-auth plug
 
-; The framework's live-view client, served straight from the hatch package — no
-; vendored copy in this app's static/ dir. App-owned assets go under ./static and are
-; served by the splat route below.
-(def serve-live-js (live/client-js-handler))
-(def serve-assets (static/handler "static"))
+; Static assets (the live-view client + ./static) are served by web/endpoint, before
+; the router — so this file is purely the app's routes.
 
 (defn echo-page (conn)
   "ANY /echo — reflect the request back as plain text."
@@ -63,6 +58,4 @@
   (live "/counter" web/views/counter))
 
   (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
-  (any "/echo" echo-page)
-  (get "/static/brood_live.js" serve-live-js)  ; specific route wins over the splat
-  (get "/static/*path" serve-assets))
+  (any "/echo" echo-page))
