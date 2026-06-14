@@ -1,0 +1,14 @@
+(defmodule web/views/home
+  "The home page. The router maps GET / to the `index` action."
+  (:use web/template)   ; html
+  (:use web/conn)       ; html-resp
+  (:use web/layout))    ; layout
+
+(defn index (c)
+  "GET / — the landing page."
+  (html-resp c (html (layout "hatch"
+                       [:h1 {} "Hello from Brood"]
+                       [:p {} "A web server written in pure Brood."]
+                       [:ul {}
+                        [:li {} [:a {:href "/counter"} "Live counter"]]
+                        [:li {} [:a {:href "/echo"} "Echo"]]]))))
