@@ -1,14 +1,36 @@
 (defmodule web/layout
-  "The shared HTML document shell. Views call `(layout title & children)` and wrap the
-  result with `html`. It carries no live-view wiring — the router's `(live …)` clause
-  injects the live-view client + status chrome into live pages, so plain pages (like
-  the home page) stay plain.")
+  "The shared HTML document shell: a top menu bar plus the page body. Views call
+  `(layout title & children)` and wrap the result with `html`. It carries no live-view
+  wiring — the router's `(live …)` clause injects the live-view client + status chrome
+  into live pages, so plain pages (like the home page) stay plain.")
+
+(def *chrome-css*
+  (str "body{margin:0;font-family:sans-serif;color:#1f2937}"
+    ".topnav{display:flex;gap:1.25rem;align-items:center;background:#111827;"
+    "padding:.6rem 1.25rem;position:sticky;top:0;z-index:50}"
+    ".topnav a{color:#cbd5e1;text-decoration:none;font-size:.95rem}"
+    ".topnav a:hover{color:#fff}"
+    ".topnav .brand{color:#fff;font-weight:600;font-size:1.05rem;margin-right:.5rem}"
+    "main{max-width:52rem;margin:0 auto;padding:1.5rem}"))
+
+(defn nav-bar ()
+  "The top menu bar — links to the demo's pages."
+  [:nav {:class "topnav"}
+   [:a {:href "/" :class "brand"} "Hatch"]
+   [:a {:href "/counter"} "Counter"]
+   [:a {:href "/counter-inline"} "Counter (inline)"]
+   [:a {:href "/page-inline"} "Page (inline)"]
+   [:a {:href "/page-template"} "Page (template)"]
+   [:a {:href "/echo"} "Echo"]])
 
 (defn layout (title & children)
-  "The shared page shell."
+  "The shared page shell: menu bar on top, page content below."
   [:html {}
-    [:head {}
-      [:meta {:charset "utf-8"}]
-      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-      [:title {} title]]
-    [:body {} children]])
+   [:head {}
+    [:meta {:charset "utf-8"}]
+    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+    [:title {} title]
+    [:style {} *chrome-css*]]
+   [:body {}
+    (nav-bar)
+    [:main {} children]]])
