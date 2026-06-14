@@ -1,0 +1,12 @@
+(defmodule web/endpoint
+  "The endpoint — the boundary between the web server and the app, à la Phoenix's
+  Endpoint. It composes the HTTP router (web/routes) and the live-view WebSocket
+  handler (web/views/demo) and starts the server. `main` just boots it."
+  (:use http/server)                          ; start
+  (:use web/routes :refer [adapter])
+  (:use web/views/demo :refer [live-handler]))
+
+(defn serve (port)
+  "Start the web server on `port`: HTTP requests go through the router's adapter,
+  WebSocket upgrades to the live-view handler. Returns the listener pid."
+  (start port adapter live-handler))

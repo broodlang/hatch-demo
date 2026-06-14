@@ -1,15 +1,12 @@
 (defmodule main
-  "Demo entry point: resolve the port and start the server with the app router
-  (web/routes) and the live-view WebSocket handler (web/views/demo)."
-  (:use http/server)
-  (:use web/routes :refer [adapter])
-  (:use web/views/demo :refer [live-handler]))
+  "Entry point: resolve the port and boot the web endpoint."
+  (:use web/endpoint :refer [serve]))
 
 (defn port ()
   "The port to listen on: $HATCH_PORT if set (and numeric), else 5000."
   (or (string->number (or (getenv "HATCH_PORT") "")) 5000))
 
 (defn main ()
-  "Start the demo server (port 5000, or $HATCH_PORT) with HTTP + WebSocket support."
-  (start (port) adapter live-handler)
+  "Boot the endpoint (port 5000, or $HATCH_PORT) and keep the process alive."
+  (serve (port))
   (receive (:shutdown nil)))
