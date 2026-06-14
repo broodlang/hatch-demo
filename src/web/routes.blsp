@@ -1,41 +1,42 @@
 (defmodule web/routes
   "The demo's HTTP routes: a server-agnostic `path → handler` table. Each handler
-  takes a conn and returns a response; nothing here knows about the raw server
-  format — that bridge lives in web/endpoint. Pages live in web/views/demo.
+  takes a conn and returns a conn; nothing here knows about the raw server format —
+  that bridge lives in web/endpoint. Pages live under web/views.
   (Named web/routes, not web/router — the framework owns the `web/router` module.)"
-  (:use web/router)   ; defrouter, dispatch
-  (:use web/conn))    ; text-resp, not-found-resp
+  (:use web/router)  ; defrouter
+  (:use web/conn)  ; text-resp
+  (:use web/layout)  ; layout — the (live …) clause builds its mount page with it
+  (:alias web/static)  ; static/handler  — safe static file serving
+  (:alias web/live))  ; live/client-js-handler — serve brood_live.js from hatch
 
-; ---- infrastructure handlers ----
-
-(defn serve-static (conn)
-  "Serve a file from ./static relative to the working directory."
-  (let (path    (get conn :path)
-        relpath (str "." path)
-        body    (try (slurp relpath) (catch _ nil)))
-    (if (nil? body)
-      (not-found-resp conn "<h1>404 Not Found</h1>")
-      (let (ct (cond
-                 (ends-with? path ".js")   "application/javascript"
-                 (ends-with? path ".css")  "text/css"
-                 (ends-with? path ".html") "text/html"
-                 else                      "application/octet-stream"))
-        {:status 200
-         :headers {:content-type ct}
-         :body body}))))
+; The framework's live-view client, served straight from the hatch package — no
+; vendored copy in this app's static/ dir. App-owned assets go under ./static and are
+; served by the splat route below.
+(def serve-live-js (live/client-js-handler))
+(def serve-assets (static/handler "static"))
 
 (defn echo-page (c)
+  "ANY /echo — reflect the request back as plain text."
   (text-resp c
-    (str "Method:  " (get c :method) "\n"
-         "Path:    " (get c :path) "\n"
-         "Query:   " (get c :query) "\n"
-         "Headers: " (pr-str (get c :headers)) "\n"
-         "Body:    " (get c :body))))
-
-; ---- routing table ----
+    (str "Method:  "
+      (get c :method)
+      "\n"
+      "Path:    "
+      (get c :path)
+      "\n"
+      "Query:   "
+      (get c :query)
+      "\n"
+      "Headers: "
+      (pr-str (get c :headers))
+      "\n"
+      "Body:    "
+      (get c :body))))
 
 (defrouter app-router
-  (get "/"          web/views/home/index)
-  (get "/counter"   web/views/counter/show)
-  (any "/echo"      echo-page)
-  (get "/static/:_" serve-static))
+  (get "/" web/views/home/index)
+  (live "/counter" web/views/counter)  ; auto GET mount-page + WS dispatch
+  (get "/hello" (fn (c) (pr-str c)))   ; pr-str dumps the conn; string → 200 body
+  (any "/echo" echo-page)
+  (get "/static/brood_live.js" serve-live-js)  ; specific route wins over the splat
+  (get "/static/*path" serve-assets))

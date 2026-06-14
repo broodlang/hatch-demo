@@ -1,25 +1,29 @@
 (defmodule web/endpoint
   "The endpoint — the boundary between the web server and the app, à la Phoenix's
   Endpoint. It owns this server's port, bridges raw http/server requests into the
-  router (web/routes), wires the live-view WebSocket handler (web/views/counter),
-  and starts the server. `main` just calls `(serve)`."
-  (:use http/server)                          ; start
-  (:use web/conn :only [build])              ; raw request → conn
-  (:use web/routes :only [app-router])
-  (:use web/views/counter :only [live-handler])
-  (:use log :only [log-debug]))              ; per-request logging
+  router (web/routes), wires the live-view WebSocket dispatcher, and starts the
+  server. `main` just calls `(serve)`."
+  (:alias http/server)  ; server/start
+  (:alias web/conn)  ; conn/build, conn/conn->response
+  (:alias web/routes)  ; routes/app-router (its (live …) clauses register views)
+  (:alias web/live)  ; live/live-dispatcher — routes WS upgrades by path
+  (:alias log))  ; log/log-debug, log/log-error — per-request logging
 
 (defn adapter (req)
-  "Bridge an http/server raw request → conn → router → http/response map. This is
-  the server-integration seam; the router itself (app-router) is transport-agnostic.
-  Logs every request at :debug (method, path, response status)."
-  (let (conn   (build req)
-        resp   (app-router conn)
-        status (get resp :status 200))
-    (log-debug (str (get conn :method) " " (get conn :path) " -> " status))
-    {:status  status
-     :headers (get resp :headers {})
-     :body    (get resp :body "")}))
+  "Bridge an http/server raw request → conn → router → http/response map. The router
+  and handlers work in conns end to end; `conn->response` serializes the final conn
+  for http/server. A normal request is logged at :debug (method, path, status); a
+  handler that raises is logged at :error (with the failure) and answered with a 500,
+  so an error like `unbound symbol: inspect` shows up in the logs instead of vanishing
+  into the response body."
+  (let (conn (conn/build req))
+    (try
+      (let (resp (conn/conn->response (routes/app-router conn)))
+        (log/log-debug (str (get conn :method) " " (get conn :path) " -> " (get resp :status)))
+        resp)
+      (catch e
+        (log/log-error (str (get conn :method) " " (get conn :path) " -> 500: " (error-message e)))
+        {:status 500 :body "<h1>Internal Server Error</h1>"}))))
 
 (defn port ()
   "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
@@ -27,6 +31,6 @@
 
 (defn serve ()
   "Start the web server on this endpoint's port: HTTP requests are bridged through
-  the router, WebSocket upgrades go to the live-view handler. Returns the listener
+  the router, WebSocket upgrades go to the live-view dispatcher. Returns the listener
   pid."
-  (start (port) adapter live-handler))
+  (server/start (port) adapter (live/live-dispatcher)))
