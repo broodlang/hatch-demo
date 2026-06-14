@@ -42,6 +42,10 @@
   (handle-info (msg model)
     (record model (str "visitor " (get msg :from) " waved 👋")))
 
+  ; Live-navigating away keeps this session process alive, so unsubscribe explicitly —
+  ; otherwise we'd keep receiving (and re-rendering on) room broadcasts from another page.
+  (unmount (model) (pubsub/unsubscribe topic))
+
   (render (model)
     [:div {:data-live "/room" :class "space-y-6"}
       [:div {:class "prose"}
