@@ -35,7 +35,13 @@
 
 (defrouter app-router
   (get "/" web/views/home/index)
-  (live "/counter" web/views/counter)  ; auto GET mount-page + WS dispatch
+  ; Plain pages (web/page): inline Hiccup vs a .bml template.
+  (get "/page-inline" web/views/page-inline/index)
+  (get "/page-template" web/views/page-template/index)
+  ; Live views (web/live): inline render vs a .bml template. Each (live …) clause
+  ; auto-generates the GET mount page + registers the WebSocket dispatch.
+  (live "/counter-inline" web/views/counter-inline)
+  (live "/counter" web/views/counter)
   (get "/hello" (fn (conn) (pr-str (get conn :body))))  ; pr-str dumps the conn; string → 200 body
   (any "/echo" echo-page)
   (get "/static/brood_live.js" serve-live-js)  ; specific route wins over the splat

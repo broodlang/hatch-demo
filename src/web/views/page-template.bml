@@ -1,0 +1,8 @@
+<main style="font-family:sans-serif;padding:2rem;max-width:40rem;margin:auto;line-height:1.5">
+  <p><a href="/">← examples</a></p>
+  <h1>{title}</h1>
+  <p>This page's markup lives in <code>page-template.bml</code>, compiled to the same Hiccup at load.</p>
+  <ul>
+    <li :for={p <- points}>{p}</li>
+  </ul>
+</main>
