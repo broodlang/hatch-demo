@@ -1,12 +1,19 @@
 (defmodule main
-  "Entry point: resolve the port and boot the web endpoint."
-  (:use web/endpoint :refer [serve]))
+  "Entry point: start logging, resolve the port, and boot the web endpoint."
+  (:use web/endpoint :refer [serve])
+  (:use log :refer [start-logger]))
 
 (defn port ()
   "The port to listen on: $HATCH_PORT if set (and numeric), else 5000."
   (or (string->number (or (getenv "HATCH_PORT") "")) 5000))
 
+(defn log-level ()
+  "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the
+  per-request debug lines show out of the box."
+  (keyword (or (getenv "LOG_LEVEL") "debug")))
+
 (defn main ()
   "Boot the endpoint (port 5000, or $HATCH_PORT) and keep the process alive."
+  (start-logger {:level (log-level)})
   (serve (port))
   (receive (:shutdown nil)))

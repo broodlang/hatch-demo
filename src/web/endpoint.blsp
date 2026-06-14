@@ -6,14 +6,18 @@
   (:use http/server)                          ; start
   (:use web/conn :refer [build])              ; raw request → conn
   (:use web/routes :refer [app-router])
-  (:use web/views/demo :refer [live-handler]))
+  (:use web/views/demo :refer [live-handler])
+  (:use log :refer [log-debug]))              ; per-request logging
 
 (defn adapter (req)
   "Bridge an http/server raw request → conn → router → http/response map. This is
-  the server-integration seam; the router itself (app-router) is transport-agnostic."
-  (let (conn (build req)
-        resp (app-router conn))
-    {:status  (get resp :status 200)
+  the server-integration seam; the router itself (app-router) is transport-agnostic.
+  Logs every request at :debug (method, path, response status)."
+  (let (conn   (build req)
+        resp   (app-router conn)
+        status (get resp :status 200))
+    (log-debug (str (get conn :method) " " (get conn :path) " -> " status))
+    {:status  status
      :headers (get resp :headers {})
      :body    (get resp :body "")}))
 
