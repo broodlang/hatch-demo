@@ -5,11 +5,22 @@
   (:use web/layout))  ; layout
 
 (defn index (conn)
-  "GET / — the landing page."
+  "GET / — the landing page: four examples across the page/live × inline/template matrix."
   (page conn
     (layout "hatch"
-      [:h1 {} "Hello from Brood"]
-      [:p {} "A web server written in pure Brood."]
-      [:ul {}
-        [:li {} [:a {:href "/counter"} "Live counter"]]
-        [:li {} [:a {:href "/echo"} "Echo"]]])))
+      [:main {:style "font-family:sans-serif;padding:2rem;max-width:44rem;margin:auto;line-height:1.5"}
+       [:h1 {} "Hatch — markup, four ways"]
+       [:p {} "The same render format (Hiccup) reached two ways — written inline, or "
+        "compiled from an HTML-flavoured " [:code {} ".bml"] " template — across plain "
+        "pages and live views."]
+       [:h2 {} "Plain pages " [:code {} "(web/page)"]]
+       [:ul {}
+        [:li {} [:a {:href "/page-inline"} "1a · inline Hiccup"]]
+        [:li {} [:a {:href "/page-template"} "1b · template (page-template.bml)"]]]
+       [:h2 {} "Live views " [:code {} "(web/live)"]]
+       [:ul {}
+        [:li {} [:a {:href "/counter-inline"} "2a · inline render"]]
+        [:li {} [:a {:href "/counter"} "2b · template (counter.bml)"]]]
+       [:p {:style "color:#888"} "2a and 2b render identical UI — inline Hiccup vs the "
+        ".bml that lowers to it."]
+       [:p {} [:a {:href "/echo"} "/echo"] " — request reflector"]])))

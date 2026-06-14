@@ -1,0 +1,19 @@
+(defmodule web/views/page-template
+  "Example 1b — a plain page (web/page) whose markup comes from a sibling .bml file,
+  compiled to Hiccup at load by `deftemplate`. The same shape as web/views/page-inline,
+  but the markup lives in page-template.bml and shows {…} interpolation + :for."
+  (:use web/page)     ; page
+  (:use web/layout)   ; layout
+  (:use web/bml))     ; deftemplate
+
+(defn points ()
+  ["transport: web/page"
+   "markup: page-template.bml (deftemplate)"
+   "uses {…} interpolation and :for"])
+
+; Compile page-template.bml into `body`, a function of (title points).
+(deftemplate body (title points) "page-template.bml")
+
+(defn index (conn)
+  "GET /page-template — a plain page rendered from page-template.bml."
+  (page conn (layout "Template page" (body "Plain page · template (.bml)" (points)))))
