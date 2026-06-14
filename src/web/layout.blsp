@@ -14,14 +14,16 @@
     "main{max-width:52rem;margin:0 auto;padding:1.5rem}"))
 
 (defn nav-bar ()
-  "The top menu bar — links to the demo's pages."
+  "The top menu bar — links to the demo's pages. `data-nav` opts a link into live
+  navigation: from a live page, clicking another live view swaps it over the open
+  socket (no reload); a non-live target falls back to a normal page load."
   [:nav {:class "topnav"}
-   [:a {:href "/" :class "brand"} "Hatch"]
-   [:a {:href "/counter"} "Counter"]
-   [:a {:href "/counter-inline"} "Counter (inline)"]
-   [:a {:href "/page-inline"} "Page (inline)"]
-   [:a {:href "/page-template"} "Page (template)"]
-   [:a {:href "/echo"} "Echo"]])
+   [:a {:href "/" :data-nav true :class "brand"} "Hatch"]
+   [:a {:href "/counter" :data-nav true} "Counter"]
+   [:a {:href "/counter-inline" :data-nav true} "Counter (inline)"]
+   [:a {:href "/page-inline" :data-nav true} "Page (inline)"]
+   [:a {:href "/page-template" :data-nav true} "Page (template)"]
+   [:a {:href "/echo" :data-nav true} "Echo"]])
 
 (defn layout (title & children)
   "The shared page shell: menu bar on top, page content below."
