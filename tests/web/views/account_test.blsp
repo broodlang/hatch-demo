@@ -1,0 +1,61 @@
+;; HTTP Tier-1 tests for /account, driven through the real app-router with the synthetic
+;; request harness — exercising form body params, the signed session cookie, and one-shot
+;; flash end to end (the fetch-session + fetch-flash `through` group in web/routes).
+(defmodule web-views-account-test
+  ; request / status / body-contains? / resp-header
+  (:use web/test)
+  ; app-router
+  (:use web/routes)
+  ; conn->response — materializes the Set-Cookie (run by the before-send hook)
+  (:alias web/conn)
+  (:use test))
+
+(defn session-cookie (resp)
+  "The `_hatch_session` cookie value a response conn would send, or nil if none. The cookie
+  is written by a before-send hook, so it only exists once the conn is serialized."
+  (let (cookies (get (get (conn/conn->response resp) :headers) :set-cookie))
+    (if (or (nil? cookies) (empty? cookies))
+      nil
+      (let (sc (first cookies)
+            eq (index-of sc "=")
+            tail (substring sc (+ eq 1) (string-length sc))
+            semi (index-of tail ";"))
+        (substring tail 0 semi)))))
+
+(defn get-with (cookie)
+  "GET /account carrying the session `cookie`."
+  (request app-router "GET" "/account" {:headers {:cookie (str "_hatch_session=" cookie)}}))
+
+(describe "GET /account"
+  (test "renders the form"
+    (let (resp (request app-router "GET" "/account"))
+      (assert= (status resp) 200)
+      (assert= (body-contains? resp "Display name") true)))
+  (test "with no session, prompts for a name"
+    (assert= (body-contains? (request app-router "GET" "/account") "know your name yet") true)))
+
+(describe "POST /account (body params + session + flash)"
+  (test "save redirects back to /account"
+    (let (resp (request app-router
+                 "POST"
+                 "/account"
+                 {:headers {:content-type "application/x-www-form-urlencoded"} :body "name=Ada"}))
+      (assert= (status resp) 302)
+      (assert= (resp-header resp :location) "/account")))
+  (test "saved name persists in the session; flash shows once then clears"
+    (let (saved (request app-router
+                  "POST"
+                  "/account"
+                  {:headers {:content-type "application/x-www-form-urlencoded"} :body "name=Grace"})
+          c1 (session-cookie saved)
+          g1 (get-with c1)
+          c2 (session-cookie g1)
+          g2 (get-with c2))
+      ; first GET after save: session greeting + the one-shot flash
+      (assert= (body-contains? g1 "Welcome back, Grace!") true)
+      (assert= (body-contains? g1 "Saved! Hi, Grace.") true)
+      ; second GET: name still remembered, flash gone
+      (assert= (body-contains? g2 "Welcome back, Grace!") true)
+      (assert= (body-contains? g2 "Saved! Hi, Grace.") false)))
+  (test "a forged session cookie is ignored (signature fails → empty session)"
+    (assert= (body-contains? (get-with "tampered.deadbeef") "know your name yet") true)))

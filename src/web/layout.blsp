@@ -1,50 +1,55 @@
+; stylesheet — the <link rel=stylesheet> helper
 (defmodule web/layout
-  "The shared HTML document shell: a top menu bar plus the page body. Views call
-  `(layout title & children)` and wrap the result with `html`. It carries no live-view
-  wiring — the router's `(live …)` clause injects the live-view client + status chrome
-  into live pages, so plain pages (like the home page) stay plain.")
+  "The shared HTML document shell: a daisyUI navbar plus the page body. Views call
+  `(layout title & children)` and wrap the result with `html`. Styling comes from
+  Tailwind + daisyUI, built into /static/app.css by the asset watcher (see web/endpoint
+  and bin/setup) — this module just links it. It carries no live-view wiring: the
+  router's `(live …)` clause injects the live-view client + status chrome into live
+  pages, so plain pages (like the home page) stay plain."
+  (:use web/template))
+(defn nav-link (href label)
+  "A live-navigable link (`data-nav`): from a live page, clicking another live view swaps
+  it over the open socket (no reload); a non-live target falls back to a normal load."
+  [:a {:href href :data-nav true} label])
 
-(def *chrome-css*
-  (str "body{margin:0;font-family:sans-serif;color:#1f2937}"
-    ".topnav{display:flex;gap:1.25rem;align-items:center;background:#111827;"
-    "padding:.6rem 1.25rem;position:sticky;top:0;z-index:50}"
-    ".topnav a{color:#cbd5e1;text-decoration:none;font-size:.95rem}"
-    ".topnav a:hover{color:#fff}"
-    ".topnav .brand{color:#fff;font-weight:600;font-size:1.05rem;margin-right:.5rem}"
-    ".topnav .navgroup{color:#6b7280;font-size:.72rem;text-transform:uppercase;"
-    "letter-spacing:.06em;margin-left:.75rem;border-left:1px solid #374151;padding-left:.75rem}"
-    "main{max-width:52rem;margin:0 auto;padding:1.5rem}"))
+(defn nav-dropdown (label & items)
+  "A daisyUI dropdown grouping related nav links under `label`."
+  [:div {:class "dropdown dropdown-end"}
+    [:div {:tabindex "0" :role "button" :class "btn btn-ghost btn-sm"} label]
+    [:ul {:tabindex "0"
+          :class "menu dropdown-content bg-base-200 rounded-box z-[1] w-56 p-2 shadow"}
+      items]])
 
 (defn nav-bar ()
-  "The top menu bar — links to the demo's pages. `data-nav` opts a link into live
-  navigation: from a live page, clicking another live view swaps it over the open
-  socket (no reload); a non-live target falls back to a normal page load.
-
-  The live views are grouped under their live-session (`customer` / `admin`). Clicking
-  between two views in the *same* session swaps over the socket — no reload; crossing
-  into the other session forces a full page reload (the socket can't cross the auth
-  boundary). Same view module, distinct paths per session."
-  [:nav {:class "topnav"}
-    [:a {:href "/" :data-nav true :class "brand"} "Hatch"]
-    [:span {:class "navgroup"} "customer"]
-    [:a {:href "/counter" :data-nav true} "Counter"]
-    [:a {:href "/counter-inline" :data-nav true} "Counter (inline)"]
-    [:span {:class "navgroup"} "admin"]
-    [:a {:href "/admin/counter" :data-nav true} "Counter"]
-    [:a {:href "/admin/counter-inline" :data-nav true} "Counter (inline)"]
-    [:span {:class "navgroup"} "pages"]
-    [:a {:href "/page-inline" :data-nav true} "Page (inline)"]
-    [:a {:href "/page-template" :data-nav true} "Page (template)"]
-    [:a {:href "/echo" :data-nav true} "Echo"]])
+  "The top menu bar — a daisyUI navbar. The live views are grouped by their live-session
+  (`customer` / `admin`): clicking between two views in the same session swaps over the
+  socket (no reload); crossing sessions forces a full reload (the auth boundary)."
+  [:div {:class "navbar bg-base-300 shadow-sm sticky top-0 z-50"}
+    [:div {:class "navbar-start"}
+      [:a {:href "/" :data-nav true :class "btn btn-ghost text-xl"} "Hatch"]]
+    [:div {:class "navbar-end gap-1"}
+      (nav-dropdown "Customer"
+        [:li {} (nav-link "/counter" "Counter")]
+        [:li {} (nav-link "/counter-inline" "Counter (inline)")]
+        [:li {} (nav-link "/signup" "Live form")])
+      (nav-dropdown "Admin"
+        [:li {} (nav-link "/admin/counter" "Counter")]
+        [:li {} (nav-link "/admin/counter-inline" "Counter (inline)")])
+      (nav-dropdown "Pages"
+        [:li {} (nav-link "/page-inline" "Page (inline)")]
+        [:li {} (nav-link "/page-template" "Page (template)")])
+      [:a {:href "/account" :data-nav true :class "btn btn-ghost btn-sm"} "Account"]
+      [:a {:href "/slow" :data-nav true :class "btn btn-ghost btn-sm"} "Slow"]
+      [:a {:href "/dev" :data-nav true :class "btn btn-ghost btn-sm"} "Dev"]]])
 
 (defn layout (title & children)
-  "The shared page shell: menu bar on top, page content below."
-  [:html {}
+  "The shared page shell: daisyUI navbar on top, page content in a centered <main>."
+  [:html {:data-theme "light"}
     [:head {}
       [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
       [:title {} title]
-      [:style {} *chrome-css*]]
-    [:body {}
+      (stylesheet "/static/app.css")]
+    [:body {:class "min-h-screen bg-base-100 text-base-content"}
       (nav-bar)
-      [:main {} children]]])
+      [:main {:class "max-w-3xl mx-auto p-6"} children]]])

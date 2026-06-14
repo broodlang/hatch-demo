@@ -1,22 +1,19 @@
+; layout owns the shell
 (defmodule web/views/page-inline
   "Example 1a — a plain page (web/page) whose markup is written **inline** as Hiccup
   s-expressions, right in the handler. Compare with web/views/page-template, which
   renders the same card from a .bml file."
-  (:use web/page)     ; page — render a Hiccup document to a response
-  (:use web/layout))  ; layout
-
-(def *card*
-  "font-family:sans-serif;padding:2rem;max-width:40rem;margin:auto;line-height:1.5")
-
+  ; page — render a Hiccup document to a response
+  (:use web/page)
+  (:use web/layout))
 (defn index (conn)
   "GET /page-inline — a plain page rendered from inline Hiccup."
   (page conn
     (layout "Inline page"
-      [:main {:style *card*}
-       [:p {} [:a {:href "/"} "← examples"]]
-       [:h1 {} "Plain page · inline Hiccup"]
-       [:p {} "This page's markup is Hiccup s-expressions written directly in the handler — no template file."]
-       [:ul {}
-        [:li {} "transport: " [:code {} "web/page"]]
-        [:li {} "markup: inline " [:code {} "[:tag …]"] " Hiccup"]
-        [:li {} "the original, unchanged way to write a page"]]])))
+      [:h1 {:class "text-2xl font-bold mb-3"} "Plain page · inline Hiccup"]
+      [:p {:class "mb-4 opacity-70"}
+        "This page's markup is Hiccup s-expressions written directly in the handler — no template file."]
+      [:ul {:class "list-disc ml-6 space-y-1"}
+        [:li {} "transport: " [:code {:class "badge badge-ghost"} "web/page"]]
+        [:li {} "markup: inline " [:code {:class "badge badge-ghost"} "[:tag …]"] " Hiccup"]
+        [:li {} "the original, unchanged way to write a page"]])))

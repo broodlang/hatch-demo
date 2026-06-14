@@ -1,0 +1,55 @@
+(defmodule web/views/account
+  "A plain (non-live) page demonstrating Hatch's HTTP Tier-1 plumbing: form **body params**,
+  signed **sessions**, and **flash**. `GET /account` shows the display name remembered in the
+  session; `POST /account` reads the submitted form field, saves it to the session, sets a
+  one-shot flash, and redirects back (the POST→redirect→GET pattern). The session +flash
+  plugs are wired in web/routes; the layout renders any flash."
+  ; page — render Hiccup to a response
+  (:use web/page)
+  (:use web/layout)
+  ; param, redirect-resp
+  (:use web/conn)
+  ; get-session / put-session / put-flash
+  (:alias web/session))
+(defn index (conn)
+  "GET /account — show the session-remembered name and a form to change it."
+  (page conn
+    (layout "Account"
+      [:h1 {:class "text-2xl font-bold mb-2"} "Account · session + flash"]
+      [:p {:class "mb-4 opacity-70"}
+        "Your name is kept in a signed session cookie. Saving it sets a one-shot flash and "
+        "redirects — the message shows once, then is gone on the next load."]
+      (flash-banner conn)
+      (greeting conn)
+      [:form {:method "post" :action "/account" :class "card bg-base-200"}
+        [:div {:class "card-body space-y-3"}
+          [:label {:class "label"} [:span {:class "label-text"} "Display name"]]
+          [:input {:name "name"
+                   :value (session/get-session conn "name" "")
+                   :placeholder "Ada"
+                   :class "input input-bordered w-full"}]
+          [:div {:class "card-actions"}
+            [:button {:class "btn btn-primary"} "Save"]]]])))
+
+(defn flash-banner (conn)
+  "Render the one-shot `info` flash as a daisyUI alert, or nothing when there's no flash."
+  (let (msg (session/get-flash conn "info"))
+    (if (nil? msg)
+      ""
+      [:div {:class "alert alert-success mb-4"} [:span {} msg]])))
+
+(defn greeting (conn)
+  "A welcome line when the session already remembers a name, else a prompt."
+  (let (name (session/get-session conn "name"))
+    (if (or (nil? name) (= name ""))
+      [:p {:class "mb-4"} "We don't know your name yet — set it below."]
+      [:p {:class "mb-4 text-lg"} (str "Welcome back, " name "!")])))
+
+(defn save (conn)
+  "POST /account — read the form's `name` body param, persist it to the session, flash a
+  confirmation, and redirect back to GET /account."
+  (let (name (or (param conn "name") ""))
+    (-> conn
+      (session/put-session "name" name)
+      (session/put-flash "info" (if (= name "") "Cleared your name." (str "Saved! Hi, " name ".")))
+      (redirect-resp "/account"))))

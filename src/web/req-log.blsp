@@ -1,0 +1,169 @@
+; A pairing logger for the endpoint's per-request log. A request is tracked from the
+; moment it arrives until the handler reports back. Each lifecycle event is built as a
+; *record* (`{:level :msg :meta}`) by a pure builder below, so the same shape is logged
+; at runtime and asserted in tests; the backend (see web/main) renders records as either
+; human text or JSON. Two knobs:
+;  - combine? (default true): one folded line per request (`[rid] GET / -> 200 in 4.2ms`,
+;    held until done). When false, an `in` line is logged on arrival and an `out` line on
+;    completion — two correlated lines (request_id ties them).
+;  - the watchdog: a request that overruns `req-log--timeout-ms` is surfaced at :warn —
+;    a `request.pending` line while in flight, and its completion bumped to :warn — so
+;    slow requests don't hide at :debug.
+(defmodule web/req-log
+  "Tracks a request's lifecycle and logs it as structured records. `web/endpoint` calls
+  `(open rid method path)` *before* the handler runs, then `(close rid status ms)` (or
+  `(fail rid status ms err)`) once it's done. Each event is a record built by a pure
+  builder (`start-record` / `done-record` / `error-record` / `pending-record`) carrying a
+  human `:msg` and machine `:meta` (request_id / method / path / status_code /
+  duration_ms / event); web/main's backend renders them as text or JSON.
+
+  A `proc/gen` process owns the in-flight map (async, never blocks the caller). With
+  `combine?` true (default) the request is held and emitted as one line on completion;
+  with it false the `in` line is logged at `open` and the `out` line at completion. On
+  `open` a one-shot watchdog is armed; if the request is still in flight at the deadline
+  it logs a `request.pending` :warn and marks the request slow (keeping its entry), so the
+  eventual completion still prints in full and is bumped to :warn / `request.slow`. An
+  :error never downgrades. A completion that beats the watchdog clears the entry, so the
+  later tick is a no-op. If no process is running, calls log standalone (still
+  structured), so a log is never lost."
+  ; defprocess / spawn-server / !
+  (:use proc/gen)
+  ; log/log — the real sink each record is written to
+  (:alias log))
+
+; How long a request waits before we warn, and its human label (derived, so the two never
+; drift): 1000 -> "1s", 1500 -> "1.5s".
+(def req-log--timeout-ms 1000)
+(def req-log--deadline (str (/ req-log--timeout-ms 1000) "s"))
+
+(defn req-log--head (rid method path)
+  "The human prefix every line for a request shares: `[rid] METHOD path`."
+  (str "[" rid "] " method " " path))
+
+(defn req-log--base (rid method path)
+  "The machine fields every record for a request carries."
+  {:request_id rid :method method :path path})
+
+;; ---- pure record builders (used by the process *and* the tests) -------------
+(defn start-record (rid method path)
+  "The `in` record logged on arrival in non-combined mode: `[rid] METHOD path`."
+  {:level :debug
+   :msg (req-log--head rid method path)
+   :meta (merge (req-log--base rid method path) {:event "request.start"})})
+
+(defn done-record (rid method path status ms slow?)
+  "The `out` record for a successful request: `[rid] METHOD path -> <status> in <ms>ms`.
+  At :warn / `request.slow` when `slow?` (it overran the deadline), else :debug."
+  {:level (if slow? :warn :debug)
+   :msg (str (req-log--head rid method path) " -> " status " in " ms "ms")
+   :meta (merge (req-log--base rid method path)
+           {:status_code status
+            :duration_ms ms
+            :event (if slow? "request.slow" "request.complete")})})
+
+(defn error-record (rid method path status ms err)
+  "The `out` record for a failed request: `… -> <status> in <ms>ms (<err>)` at :error."
+  {:level :error
+   :msg (str (req-log--head rid method path) " -> " status " in " ms "ms (" err ")")
+   :meta (merge (req-log--base rid method path)
+           {:status_code status :duration_ms ms :error err :event "request.error"})})
+
+(defn pending-record (rid method path)
+  "The `request.pending` :warn record the watchdog logs when a request is still in flight
+  at the deadline."
+  {:level :warn
+   :msg (str (req-log--head rid method path) " -> pending after " req-log--deadline)
+   :meta (merge (req-log--base rid method path)
+           {:event "request.pending" :after_ms req-log--timeout-ms})})
+
+(defn req-log--emit (rec)
+  "Write a record through the real logger at its `:level`, carrying its `:meta`."
+  (log/log (get rec :level) (get rec :msg) (get rec :meta))
+  nil)
+
+;; ---- the in-flight tracking process -----------------------------------------
+(defn req-log--watchdog (srv rid)
+  "Run in a fresh process by `open`: sleep the deadline, then tell `srv` that `rid` is
+  overdue. `srv` ignores the tick if the request already finished."
+  (sleep req-log--timeout-ms)
+  (send srv [:timeout rid]))
+
+(defprocess req-log--server
+  (state)
+  "Carries `{:combine? bool :pending {rid -> {:method :path :slow? bool}}}`. `open` stashes
+  the request, arms a watchdog, and (in non-combined mode) logs the `in` record; `close` /
+  `fail` log the `out` record (slow → :warn) and clear the entry; the watchdog's
+  `[:timeout rid]` logs the pending :warn and marks the request slow while keeping it."
+  (cast [:open rid method path]
+    (do
+      (when (not (get state :combine?))
+        (req-log--emit (start-record rid method path)))
+      (let (srv (self)) (spawn (req-log--watchdog srv rid)))
+      (update state :pending assoc rid {:method method :path path :slow? false})))
+  (cast [:close rid status ms]
+    (let (e (get (get state :pending) rid))
+      (req-log--emit (done-record rid
+                       (or (get e :method) "?")
+                       (or (get e :path) "?")
+                       status
+                       ms
+                       (get e :slow?)))
+      (update state :pending dissoc rid)))
+  (cast [:fail rid status ms err]
+    (let (e (get (get state :pending) rid))
+      (req-log--emit (error-record rid
+                       (or (get e :method) "?")
+                       (or (get e :path) "?")
+                       status
+                       ms
+                       err))
+      (update state :pending dissoc rid)))
+  (info [:timeout rid]
+    (let (e (get (get state :pending) rid))
+      (if e
+        (do
+          (req-log--emit (pending-record rid (get e :method) (get e :path)))
+          (update state :pending assoc rid (assoc e :slow? true)))
+        ; Already finished in time — nothing to do.
+        state))))
+
+;; ---- lifecycle + client API -------------------------------------------------
+(defn start-req-log (& opts)
+  "Spawn the tracking process, register it as `:req-log`, and return its pid. `opts` is a
+  map: `:combine?` (default true) folds each request into one line; false logs an `in`
+  line on `open` and an `out` line on completion. Replaces any previous `:req-log`."
+  (let (o (if (empty? opts) {} (first opts))
+        combine? (if (nil? (get o :combine?)) true (get o :combine?))
+        pid (spawn-server req-log--server {:combine? combine? :pending {}}))
+    (register :req-log pid)
+    pid))
+
+(defn req-logger ()
+  "The pid of the running tracking process (registered `:req-log`), or nil."
+  (whereis :req-log))
+
+(defn open (rid method path)
+  "Begin tracking `rid` before the handler runs, so the watchdog can flag a slow one.
+  Falls back to logging the `in` record immediately if no process runs. Returns nil."
+  (let (pid (req-logger))
+    (if pid
+      (! pid [:open rid method path])
+      (req-log--emit (start-record rid method path))))
+  nil)
+
+(defn close (rid status ms)
+  "Finish `rid` on success — the `out` line at :debug, or :warn if it overran the
+  deadline. Returns nil."
+  (let (pid (req-logger))
+    (if pid
+      (! pid [:close rid status ms])
+      (req-log--emit (done-record rid "?" "?" status ms false))))
+  nil)
+
+(defn fail (rid status ms err)
+  "Finish `rid` on failure — the `out` line at :error. Returns nil."
+  (let (pid (req-logger))
+    (if pid
+      (! pid [:fail rid status ms err])
+      (req-log--emit (error-record rid "?" "?" status ms err))))
+  nil)

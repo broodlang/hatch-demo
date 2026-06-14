@@ -1,0 +1,65 @@
+;; Live-view tests for the signup form, driven through Hatch's view test harness — mount,
+;; validate/submit/reset events, and the rendered HTML, as plain function calls. Covers the
+;; as-you-type validation feedback and the submit→confirmation swap.
+(defmodule web-views-signup-view-test
+  ; live-mount / live-event / live-render — from the dep
+  (:use web/test)
+  (:alias web/views/signup)
+  (:use test))
+
+(def *empty* {:name "" :email "" :attempted? false :submitted? false})
+
+(describe "validation helpers"
+  (test "valid email passes" (assert= (signup/valid-email? "ada@example.com") true))
+  (test "no @ fails" (assert= (signup/valid-email? "nope") false))
+  (test "no dotted domain fails" (assert= (signup/valid-email? "a@b") false))
+  (test "trailing dot fails" (assert= (signup/valid-email? "a@b.") false))
+  (test "spaces fail" (assert= (signup/valid-email? "a b@c.d") false)))
+
+(describe "signup live view"
+  (test "mount starts empty"
+    (assert= (live-mount (signup/live-spec) {}) *empty*))
+  (test "a validate event updates the named field"
+    (let (spec (signup/live-spec)
+          m (live-event spec "validate" {"field" "name" "value" "Ada"} *empty*))
+      (assert= (get m :name) "Ada")))
+  (test "submit with a valid model confirms"
+    (let (spec (signup/live-spec)
+          m (live-event spec
+              "submit"
+              {}
+              {:name "Ada" :email "ada@x.com" :attempted? false :submitted? false}))
+      (assert= (get m :submitted?) true)))
+  (test "submit with an invalid model flags attempted, not submitted"
+    (let (spec (signup/live-spec)
+          m (live-event spec "submit" {} *empty*))
+      (assert= (get m :submitted?) false)
+      (assert= (get m :attempted?) true)))
+  (test "reset returns to the empty form"
+    (assert= (live-event (signup/live-spec)
+               "reset"
+               {}
+               {:name "Ada" :email "ada@x.com" :attempted? true :submitted? true})
+      *empty*)))
+
+(describe "signup render feedback"
+  (test "a bad email shows the error feedback live"
+    (assert= (includes? (live-render (signup/live-spec)
+                          {:name "Ada" :email "bad" :attempted? false :submitted? false})
+               "look like an email")
+      true))
+  (test "a valid form is marked ready to submit"
+    (assert= (includes? (live-render (signup/live-spec)
+                          {:name "Ada" :email "ada@x.com" :attempted? false :submitted? false})
+               "Ready to submit")
+      true))
+  (test "a confirmed submit swaps in the thank-you panel"
+    (assert= (includes? (live-render (signup/live-spec)
+                          {:name "Ada" :email "ada@x.com" :attempted? false :submitted? true})
+               "Thanks, Ada!")
+      true))
+  (test "the input carries no value attribute (the DOM owns what's typed)"
+    (assert= (includes? (live-render (signup/live-spec)
+                          {:name "Ada" :email "" :attempted? false :submitted? false})
+               "value=")
+      false)))

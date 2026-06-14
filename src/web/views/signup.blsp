@@ -1,0 +1,119 @@
+(defmodule web/views/signup
+  "A live form (web/live) with as-you-type validation feedback. Each keystroke pushes a
+  `validate` event over the socket (via the client's `input` listener), the server
+  re-renders, and the DOM morph patches the feedback in place — the inputs keep their focus
+  and caret because the view never renders a `value` attribute (the DOM owns what the user
+  typed). The model is kept current on every keystroke, so `submit` just trusts the model
+  and, when valid, swaps in a confirmation panel. Wired with `(live \"/signup\" …)`."
+  ; deflive
+  (:use web/live)
+  (:implements LiveModule))
+; ---- model + validation ----
+
+(defn init ()
+  "A fresh, empty form model. `attempted?` flips on a failed submit so empty fields show
+  an error rather than the neutral first-time hint."
+  {:name "" :email "" :attempted? false :submitted? false})
+
+(defn set-field (model field value)
+  "Set the model field named by the client (`\"name\"`/`\"email\"`) to `value`."
+  (cond
+    (= field "name") (assoc model :name value)
+    (= field "email") (assoc model :email value)
+    else model))
+
+(defn valid-email? (s)
+  "A deliberately simple email check: one `@` with text before it and a dotted domain
+  after (the dot not last), and no spaces. Enough to demo live feedback, not RFC 5322."
+  (let (at (index-of s "@"))
+    (and (> at 0)
+      (= (index-of s " ") -1)
+      (let (domain (substring s (+ at 1) (string-length s)))
+        (and (= (index-of domain "@") -1)
+          (> (index-of domain ".") 0)
+          (< (index-of domain ".") (- (string-length domain) 1)))))))
+
+(defn name-ok? (model) (not (blank? (get model :name))))
+(defn email-ok? (model) (valid-email? (get model :email)))
+(defn form-valid? (model) (and (name-ok? model) (email-ok? model)))
+
+; ---- live view ----
+
+(deflive
+  (mount (params) (init))
+
+  (render (model)
+    [:div {:data-live "/signup" :class "space-y-6"}
+      [:div {:class "prose"}
+        [:h1 {:class "text-2xl font-bold"} "Live form · type to validate"]
+        [:p {:class "opacity-70"}
+          "Every keystroke pushes a "
+          [:code {:class "badge badge-ghost"} "validate"]
+          " event over the socket; the server re-renders and the feedback below updates in place."]]
+      (if (get model :submitted?)
+        (signup-success model)
+        (signup-form model))])
+
+  (on "validate" (params model)
+    (set-field model (get params "field" "") (get params "value" "")))
+
+  (on "submit" (params model)
+    (if (form-valid? model)
+      (assoc model :submitted? true)
+      (assoc model :attempted? true)))
+
+  (on "reset" (params model) (init)))
+
+; ---- view pieces ----
+
+(defn signup-form (model)
+  ; A plain <div>, not a <form>: the live client drives everything over the socket
+  ; (validate on each keystroke, submit on the button's data-event), so there's no native
+  ; form submission to suppress — and no stray submit when a label or padding is clicked.
+  [:div {:class "card bg-base-200"}
+    [:div {:class "card-body space-y-4"}
+      [:div {:class "form-control"}
+        [:label {:class "label"} [:span {:class "label-text"} "Name"]]
+        [:input {:data-event "validate"
+                 :data-params "{\"field\":\"name\"}"
+                 :placeholder "Ada Lovelace"
+                 :class "input input-bordered w-full"}]
+        (name-feedback model)]
+      [:div {:class "form-control"}
+        [:label {:class "label"} [:span {:class "label-text"} "Email"]]
+        [:input {:data-event "validate"
+                 :data-params "{\"field\":\"email\"}"
+                 :placeholder "ada@example.com"
+                 :class "input input-bordered w-full"}]
+        (email-feedback model)]
+      [:div {:class "flex items-center gap-3 pt-2"}
+        [:button {:data-event "submit" :class "btn btn-primary"} "Sign up"]
+        [:span {:class (str "text-sm " (if (form-valid? model) "text-success" "opacity-60"))}
+          (if (form-valid? model) "Ready to submit." "Fill in both fields to continue.")]]]])
+
+(defn feedback-line (cls text)
+  "One small feedback line under a field."
+  [:label {:class "label"} [:span {:class (str "label-text-alt " cls)} text]])
+
+(defn name-feedback (model)
+  (cond
+    (name-ok? model) (feedback-line "text-success"
+                       (str "Looks good — " (string-length (get model :name)) " characters."))
+    (get model :attempted?) (feedback-line "text-error" "Name is required.")
+    else (feedback-line "opacity-60" "Tell us your name.")))
+
+(defn email-feedback (model)
+  (cond
+    (email-ok? model) (feedback-line "text-success" "That's a valid-looking email ✓")
+    (blank? (get model :email)) (if (get model :attempted?)
+                                  (feedback-line "text-error" "Email is required.")
+                                  (feedback-line "opacity-60" "We'll only use this to reply."))
+    else (feedback-line "text-error" "Hmm, that doesn't look like an email.")))
+
+(defn signup-success (model)
+  [:div {:class "card bg-success text-success-content"}
+    [:div {:class "card-body"}
+      [:h2 {:class "card-title"} (str "Thanks, " (get model :name) "!")]
+      [:p {} (str "We'll be in touch at " (get model :email) ".")]
+      [:div {:class "card-actions"}
+        [:button {:data-event "reset" :class "btn btn-sm"} "Start over"]]]])

@@ -1,0 +1,17 @@
+/* app.css — the *source* stylesheet. The Tailwind standalone CLI (bin/tailwindcss,
+   installed by bin/setup) compiles this to ../static/app.css, which Hatch serves at
+   /static/app.css. Hatch itself knows nothing about Tailwind — it only serves static/.
+
+   Tailwind v4 is CSS-first: no tailwind.config.js. Swapping tools means swapping this
+   file and the argv in web/endpoint's *assets* — nothing in the framework changes. */
+@import "tailwindcss";
+
+/* daisyUI, vendored by bin/setup (no npm). Enables the built-in light & dark themes;
+   the layout pins data-theme="light". */
+@plugin "./vendor/daisyui.js";
+
+/* Tailwind scans source for class names. It doesn't know Brood (.blsp) or BML (.bml)
+   extensions by default, so point it at them explicitly. Paths are relative to this
+   file; covers inline Hiccup classes and .bml template classes alike. */
+@source "../src/**/*.blsp";
+@source "../src/**/*.bml";

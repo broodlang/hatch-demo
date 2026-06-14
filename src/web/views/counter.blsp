@@ -1,12 +1,13 @@
+; checked: this module must define mount/render/handle-event
 (defmodule web/views/counter
   "The counter live view: a click counter plus a fast (1s) and slow (3s) server-pushed
   ticker. This view's own backend logic lives here (not in lib — lib is for
   cross-cutting domain logic). The router wires it with `(live \"/counter\" …)`, which
   generates the GET mount page and registers the live view for WebSocket dispatch — so
   this module is just business logic + the view."
-  (:use web/live)  ; deflive
-  (:implements LiveModule))  ; checked: this module must define mount/render/handle-event
-
+  ; deflive
+  (:use web/live)
+  (:implements LiveModule))
 ; ---- this view's backend logic ----
 
 (defn init (start)
@@ -23,8 +24,8 @@
   (mount (params)
     (init (string->number (get params "start" "0"))))
 
-  (template "counter.bml")  ; markup lives in counter.bml, compiled to Hiccup at load
-
+  ; markup lives in counter.bml, compiled to Hiccup at load
+  (template "counter.bml")
   (on "increment" (params model)
     (increment model))
 

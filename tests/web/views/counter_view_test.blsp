@@ -1,0 +1,37 @@
+;; Live-view tests for the counter, driven through Hatch's view test harness — mount,
+;; events, and ticks as plain function calls, plus the rendered HTML. Complements
+;; counter_test.blsp (which tests the bare model logic) by exercising the deflive spec
+;; and the .bml-compiled render end to end. counter-inline reuses the same model logic,
+;; so the inline render is checked too.
+(defmodule web-views-counter-view-test
+  ; live-mount / live-event / live-tick / live-render — from the dep
+  (:use web/test)
+  (:alias web/views/counter)
+  (:alias web/views/counter-inline)
+  (:use test))
+
+(describe "counter live view (template)"
+  (test "mount seeds the model from the start param"
+    (assert= (live-mount (counter/live-spec) {"start" "5"}) {:count 5 :fast 0 :slow 0}))
+  (test "an increment event advances the count"
+    (let (spec (counter/live-spec))
+      (assert= (get (live-event spec "increment" {} {:count 5 :fast 0 :slow 0}) :count) 6)))
+  (test "the fast ticker (1000ms) advances :fast"
+    (let (spec (counter/live-spec))
+      (assert= (get (live-tick spec 1000 {:count 0 :fast 0 :slow 0}) :fast) 1)))
+  (test "render shows the count and daisyUI classes"
+    (let (html (live-html (counter/live-spec) {"start" "7"}))
+      (assert= (includes? html ">7</div>") true)
+      (assert= (includes? html "card") true)
+      (assert= (includes? html "btn btn-primary") true)))
+  (test "a negative count renders the error color class"
+    (assert= (includes? (live-render (counter/live-spec) {:count -1 :fast 0 :slow 0})
+               "text-error")
+      true)))
+
+(describe "counter live view (inline) renders the same UI"
+  (test "inline render matches the template's structure"
+    (let (html (live-html (counter-inline/live-spec) {"start" "0"}))
+      (assert= (includes? html "card") true)
+      (assert= (includes? html "btn btn-primary") true)
+      (assert= (includes? html "stat-value") true))))

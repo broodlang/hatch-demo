@@ -1,0 +1,39 @@
+;; Unit tests for web/errors — the overridable error pages. `error-response` builds a
+;; standalone page (endpoint-raised 500/504); `themed` re-skins an upstream response while
+;; preserving its headers (so 401 challenges / redirect Locations survive) and leaves
+;; non-error responses untouched.
+(defmodule web-errors-test
+  (:use web/errors :only [error-meta error-response themed])
+  (:use test))
+
+(describe "web/errors — which codes are error pages"
+  (test "known codes get a specific title"
+    (is (= (first (error-meta 404)) "Page not found"))
+    (is (= (first (error-meta 500)) "Something went wrong")))
+  (test "other 4xx/5xx fall back to a generic page"
+    (is (= (error-meta 418) ["Error" "Something went wrong while handling your request."])))
+  (test "2xx/3xx are not error pages (nil)"
+    (is (= (error-meta 200) nil))
+    (is (= (error-meta 302) nil))))
+
+(describe "web/errors — error-response (standalone)"
+  (test "themes a known error code into a full HTML response"
+    (let (r (error-response 500))
+      (is (= (get r :status) 500))
+      (is (= (get (get r :headers) :content-type) "text/html; charset=utf-8"))
+      (is (includes? (get r :body) "500"))))
+  (test "returns nil for a non-error code, so callers can fall back"
+    (is (= (error-response 200) nil))))
+
+(describe "web/errors — themed (re-skin upstream, keep headers)"
+  (test "a 404 response keeps its status but gets the themed body"
+    (let (r (themed {:status 404 :headers {} :body "<h1>404 Not Found</h1>"}))
+      (is (= (get r :status) 404))
+      (is (includes? (get r :body) "Page not found"))))
+  (test "a 401 keeps its WWW-Authenticate header (the auth challenge survives)"
+    (let (r (themed {:status 401 :headers {:www-authenticate "Basic realm=x"} :body "nope"}))
+      (is (= (get (get r :headers) :www-authenticate) "Basic realm=x"))
+      (is (= (get (get r :headers) :content-type) "text/html; charset=utf-8"))))
+  (test "a 200 passes through completely unchanged"
+    (let (resp {:status 200 :headers {:content-type "image/png"} :body "binary"})
+      (is (= (themed resp) resp)))))

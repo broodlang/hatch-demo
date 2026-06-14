@@ -1,19 +1,24 @@
-<div data-live="/counter" style="font-family:sans-serif;padding:2rem">
-  <p><a href="/">← examples</a></p>
-  <section style="margin-bottom:2rem">
-    <h2>Click counter · template (.bml)</h2>
-    <p style="font-size:3rem;margin:.5rem 0;color:{(if (< @count 0) "#b91c1c" "#111")}">{@count}</p>
-    <button data-event="decrement" style="font-size:1.5rem;margin-right:.5rem">−</button>
-    <button data-event="increment" style="font-size:1.5rem">+</button>
-  </section>
-  <section style="margin-bottom:2rem">
-    <h2>Fast ticker</h2>
-    <p style="font-size:3rem;margin:.5rem 0">{@fast}</p>
-    <p style="color:#888">server pushes +1 every second</p>
-  </section>
-  <section>
-    <h2>Slow ticker</h2>
-    <p style="font-size:3rem;margin:.5rem 0">{@slow}</p>
-    <p style="color:#888">server pushes +1 every three seconds</p>
-  </section>
+<div data-live="/counter" class="space-y-6">
+  <div class="card bg-base-200">
+    <div class="card-body">
+      <h2 class="card-title">Click counter · template (.bml)</h2>
+      <div class="text-6xl font-bold {(if (< @count 0) "text-error" "text-base-content")}">{@count}</div>
+      <div class="flex gap-2 mt-2">
+        <button data-event="decrement" class="btn btn-outline btn-lg">−</button>
+        <button data-event="increment" class="btn btn-primary btn-lg">+</button>
+      </div>
+    </div>
+  </div>
+  <div class="stats stats-vertical sm:stats-horizontal shadow w-full">
+    <div class="stat">
+      <div class="stat-title">Fast ticker</div>
+      <div class="stat-value">{@fast}</div>
+      <div class="stat-desc">server pushes +1 every second</div>
+    </div>
+    <div class="stat">
+      <div class="stat-title">Slow ticker</div>
+      <div class="stat-value">{@slow}</div>
+      <div class="stat-desc">server pushes +1 every three seconds</div>
+    </div>
+  </div>
 </div>

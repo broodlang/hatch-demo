@@ -1,0 +1,66 @@
+; Override error pages here. `error-meta` matches on the HTTP status code → the page's
+; title + blurb; that's the one place to edit. `error-node` renders them through the
+; shared layout so error pages look like the rest of the app. Two entry points the
+; endpoint uses: `error-response` (a standalone page, for errors the endpoint itself
+; raises — a handler crash → 500, a timeout → 504) and `themed` (re-skins a real upstream
+; response — e.g. the router's 404 — keeping its headers so a 401 challenge or a redirect
+; Location survives).
+(defmodule web/errors
+  "The app's error pages, in one place. Add or edit a clause in `error-meta` to override
+  the page for a status code; `else` themes any other 4xx/5xx with a generic page and
+  leaves 2xx/3xx alone (so success responses and redirects pass through untouched)."
+  ; html — render Hiccup to an HTML string
+  (:use web/template :only [html])
+  ; layout — the shared page shell (navbar + styling)
+  (:use web/layout))
+
+(defn error-meta (code)
+  "`[title blurb]` for an error page `code` — the override point — or nil when `code`
+  isn't an error we render. Match on the code; `else` themes any other 4xx/5xx and returns
+  nil for 2xx/3xx so non-errors pass through."
+  (match code
+    (400 ["Bad request" "The request couldn’t be understood."])
+    (401 ["Sign-in required" "You need to sign in to view this page."])
+    (403 ["Forbidden" "You don’t have access to this page."])
+    (404 ["Page not found" "That page doesn’t exist or may have moved."])
+    (500 ["Something went wrong" "An unexpected error occurred while handling your request."])
+    (503 ["Service unavailable" "The service is temporarily unavailable — please try again shortly."])
+    (504 ["Request timed out" "The request took too long and was stopped."])
+    ;; Fallback: any other 4xx/5xx gets a generic page; 2xx/3xx aren't errors (nil), so
+    ;; those responses pass through untouched.
+    (_ (if (>= code 400) ["Error" "Something went wrong while handling your request."] nil))))
+
+(defn error-node (code title blurb)
+  "The Hiccup for an error page, through the shared layout."
+  (layout (str code " — " title)
+    [:div {:class "text-center py-16"}
+      [:h1 {:class "text-7xl font-bold text-primary"} (str code)]
+      [:p {:class "text-2xl mt-4 mb-2"} title]
+      [:p {:class "opacity-70 mb-8"} blurb]
+      [:a {:href "/" :class "btn btn-primary"} "Back home"]]))
+
+(defn error-body (code)
+  "The rendered HTML for error `code`, or nil if `code` isn't an error page."
+  (let (m (error-meta code))
+    (when m (html (error-node code (first m) (second m))))))
+
+(def error--html-headers {:content-type "text/html; charset=utf-8"})
+
+(defn error-response (code)
+  "A standalone error response map for `code` (no upstream response to re-skin), or nil if
+  `code` isn't themed. For errors the endpoint raises itself (500 crash, 504 timeout)."
+  (let (body (error-body code))
+    (when body
+      {:status code :headers error--html-headers :body body})))
+
+(defn themed (resp)
+  "Re-skin an upstream response `resp`'s body with the app's error page when its status is
+  an error we theme, keeping its headers (so a 401's WWW-Authenticate challenge or a
+  redirect's Location survives) and only adding a text/html content-type. Non-error
+  responses (2xx/3xx) pass through unchanged."
+  (let (body (error-body (get resp :status)))
+    (if body
+      (assoc resp
+        :body body
+        :headers (merge (get resp :headers {}) error--html-headers))
+      resp)))

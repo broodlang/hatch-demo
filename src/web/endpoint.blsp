@@ -1,14 +1,42 @@
+; per-request logging (web/req-log) + per-request isolation (task)
 (defmodule web/endpoint
   "The endpoint — the boundary between the web server and the app, à la Phoenix's
   Endpoint. It owns this server's port, serves static assets, bridges raw http/server
   requests into the router (web/routes), wires the live-view WebSocket dispatcher, and
   starts the server. `main` just calls `(serve)`."
-  (:alias http/server)  ; server/start
-  (:alias web/conn)  ; conn/build, conn/conn->response
-  (:alias web/routes)  ; routes/app-router (its (live …) clauses register views)
-  (:alias web/live)  ; live/live-dispatcher (WS), live/client-js-handler (the client)
-  (:alias web/static)  ; static/serve — app assets under ./static
-  (:alias log))  ; log/log-debug, log/log-error — per-request logging
+  ; server/start
+  (:alias http/server)
+  ; conn/build, conn/conn->response
+  (:alias web/conn)
+  ; routes/app-router (its (live …) clauses register views)
+  (:alias web/routes)
+  ; live/live-dispatcher (WS), live/client-js-handler (the client)
+  (:alias web/live)
+  ; static/serve — app assets under ./static
+  (:alias web/static)
+  ; assets/ensure — first-run setup + build + watch the CSS bundler in dev
+  (:alias web/assets)
+  ; req-log/open, req-log/close, req-log/fail — per-request structured logging
+  (:alias web/req-log)
+  ; errors/themed, errors/error-response — overridable error pages by status code
+  (:alias web/errors)
+  ; task/task — run each handler in a monitored child process (isolation + timeout)
+  (:alias task))
+; Asset pipeline (build-step-agnostic — see hatch's web/assets). We use the Tailwind v4
+; standalone CLI + daisyUI, no npm; `bin/setup` installs them. In dev `(serve)` starts
+; `tailwindcss --watch` (a rebuild hot-swaps the page's CSS over the live socket — no
+; reload); a release runs `(assets/build *assets*)` once before serving. To switch tools
+; (esbuild, sass, …), edit these argv lists — nothing else here changes.
+(def *assets*
+  {:watchers [{:cmd ["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--watch"]
+               :reload-on "Done in"}]
+   :build [["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--minify"]]
+   ; First-run setup, so `nest run` in dev needs no manual `bin/setup`: assets/ensure
+   ; runs :install when :install-probe (the bundler binary) is missing, then a one-shot
+   ; :build, then the watcher — see web/assets/ensure. bin/setup downloads the Tailwind
+   ; standalone CLI + daisyUI (network, one time).
+   :install [["bin/setup"]]
+   :install-probe "bin/tailwindcss"})
 
 ; Static serving runs in the endpoint, before the router (Phoenix's Plug.Static
 ; shape): the framework's live-view client straight from the hatch package, and the
@@ -21,41 +49,72 @@
   (let (path (get conn :path))
     (cond
       (= path "/static/brood_live.js") (serve-client-js conn)
-      (starts-with? path "/static/") (static/serve conn "static" (substring path 8 (string-length path)))
+      (starts-with? path "/static/") (static/serve conn
+                                       "static"
+                                       (substring path 8 (string-length path)))
       else nil)))
+
+; A handler still running after this is hard-killed (504) — a backstop for a wedged
+; handler, well above req-log's soft :warn deadline and any legitimate slow page.
+(def *handler-timeout-ms* 30000)
 
 (defn adapter (request)
   "Bridge an http/server raw request → conn → router → http/response map. The router
-  and handlers work in conns end to end; `conn->response` serializes the final conn
-  for http/server. Each request gets a short request-id; a normal request logs two
-  :debug lines under it — the response status, then the render time once the response
-  is built; a handler that raises is logged at :error (with the failure) and a 500,
-  so an error like `unbound symbol: inspect` shows up in the logs instead of vanishing
-  into the response body."
-  ;; A short random request-id ties the two log lines (and any handler logging)
+  and handlers work in conns end to end; `conn->response` serializes the final conn for
+  http/server. Each request gets a short request-id and is logged through web/req-log
+  (opened before the handler runs, closed with status + render time after). Rather than
+  guard the handler with try/catch, it runs in a monitored child process via `task`: this
+  process reacts to its outcome — done, a crash (any failure mode, not just catchable
+  throws → 500), or overrunning *handler-timeout-ms* (the child is killed → 504). req-log
+  is always closed, so a crash logs at :error instead of vanishing into the response."
+  ;; A short random request-id ties this request's log line and any handler logging
   ;; together — grep one id to follow a single request. It's stashed on the conn as
-  ;; :request-id, so handlers can include it in their own log lines.
+  ;; :request-id, so handlers can include it in their own log lines. `elapsed` is a thunk
+  ;; so every exit path times from the same `start`.
   (let (rid (random-token 4)
         conn (conn/assign (conn/build request) :request-id rid)
-        pre (str "[" rid "] " (get conn :method) " " (get conn :path))
-        start (now-ns))
-    (try
-      (let (resp (conn/conn->response (or (static-response conn) (routes/app-router conn)))
-            ms (round-to (/ (- (now-ns) start) 1000000.0) 2))
-        (log/log-debug (str pre " -> " (get resp :status)))
-        ;; second entry, once the response is built: how long the render took
-        (log/log-debug (str pre " rendered in " ms "ms"))
-        resp)
-      (catch e
-        (log/log-error (str pre " -> 500: " (error-message e)))
-        {:status 500 :body "<h1>Internal Server Error</h1>"}))))
+        start (now-ns)
+        elapsed (fn () (round-to (/ (- (now-ns) start) 1000000.0) 2)))
+    ;; Open before the handler runs, so req-log's watchdog can flag a slow one.
+    (req-log/open rid (get conn :method) (get conn :path))
+    ;; Run the handler off this process; `h` (the task handle) tags its reply, so the
+    ;; selective receive below only consumes this request's outcome.
+    (let (h (task/task (fn ()
+                         (conn/conn->response (or (static-response conn) (routes/app-router conn))))
+              {:timeout *handler-timeout-ms*}))
+      (receive
+        ;; themed re-skins an error-status response (e.g. the router's 404) and passes a
+        ;; normal response straight through
+        ([:task-done ~h resp] (do
+                                (req-log/close rid (get resp :status) (elapsed))
+                                (errors/themed resp)))
+        ([:task-error ~h msg] (do (req-log/fail rid 500 (elapsed) msg) (errors/error-response 500)))
+        ([:task-timeout ~h] (do
+                              (req-log/fail rid
+                                504
+                                (elapsed)
+                                (str "handler exceeded " *handler-timeout-ms* "ms"))
+                              (errors/error-response 504)))))))
 
 (defn port ()
   "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
   (or (string->number (or (getenv "HATCH_PORT") "")) 5000))
 
+(defn dev? ()
+  "True unless $HATCH_ENV names a non-dev environment — so dev is the zero-config
+  default and the asset watcher starts on a plain `nest run`."
+  (= (or (getenv "HATCH_ENV") "dev") "dev"))
+
+(defn combine-logs? ()
+  "Whether req-log folds each request into one line: false when $LOG_COMBINE is
+  \"separate\" (an `in` line on arrival + an `out` line on completion), else true."
+  (not (= (getenv "LOG_COMBINE") "separate")))
+
 (defn serve ()
   "Start the web server on this endpoint's port: HTTP requests are bridged through
-  the router, WebSocket upgrades go to the live-view dispatcher. Returns the listener
-  pid."
+  the router, WebSocket upgrades go to the live-view dispatcher. In dev, also start the
+  asset watcher so CSS rebuilds on save (and hot-swaps over open sockets). Returns the
+  listener pid."
+  (when (dev?) (assets/ensure *assets*))
+  (req-log/start-req-log {:combine? (combine-logs?)})
   (server/start (port) adapter (live/live-dispatcher)))
