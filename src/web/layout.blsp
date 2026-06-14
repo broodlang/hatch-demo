@@ -33,7 +33,8 @@
         [:li {} (nav-link "/counter-inline" "Counter (inline)")]
         [:li {} (nav-link "/signup" "Live form")]
         [:li {} (nav-link "/room" "Live room")]
-        [:li {} (nav-link "/presence" "Live presence")])
+        [:li {} (nav-link "/presence" "Live presence")]
+        [:li {} (nav-link "/reorder" "Keyed list")])
       (nav-dropdown "Admin"
         [:li {} (nav-link "/admin/counter" "Counter")]
         [:li {} (nav-link "/admin/counter-inline" "Counter (inline)")])
