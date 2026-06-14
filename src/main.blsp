@@ -1,7 +1,7 @@
 (defmodule main
   "Entry point: start logging, resolve the port, and boot the web endpoint."
   (:use web/endpoint :refer [serve])
-  (:use log :refer [start-logger]))
+  (:use log :refer [start-logger fn-backend]))
 
 (defn port ()
   "The port to listen on: $HATCH_PORT if set (and numeric), else 5000."
@@ -12,8 +12,13 @@
   per-request debug lines show out of the box."
   (keyword (or (getenv "LOG_LEVEL") "debug")))
 
+(defn println-backend ()
+  "A logger backend that writes each formatted line to stdout with `print` (the
+  formatted line already ends in a newline)."
+  (fn-backend (fn (line) (print line))))
+
 (defn main ()
   "Boot the endpoint (port 5000, or $HATCH_PORT) and keep the process alive."
-  (start-logger {:level (log-level)})
+  (start-logger {:level (log-level) :backends [(println-backend)]})
   (serve (port))
   (receive (:shutdown nil)))
