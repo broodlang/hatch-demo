@@ -16,7 +16,7 @@
   (render (model)
     ; The Hiccup that counter.bml lowers to: `{@count}` is `(get model :count)`, and the
     ; conditional daisyUI class (text-error on negative) is the `(str …)` below.
-    [:div {:data-live "/counter-inline" :class "space-y-6"}
+    [:div {:class "space-y-6"}
       [:div {:class "card bg-base-200"}
         [:div {:class "card-body"}
           [:h2 {:class "card-title"} "Click counter · inline render"]

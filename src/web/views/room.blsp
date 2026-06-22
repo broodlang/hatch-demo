@@ -47,7 +47,7 @@
   (unmount (model) (pubsub/unsubscribe topic))
 
   (render (model)
-    [:div {:data-live "/room" :class "space-y-6"}
+    [:div {:class "space-y-6"}
       [:div {:class "prose"}
         [:h1 {:class "text-2xl font-bold"} "Live room · PubSub"]
         [:p {:class "opacity-70"}
