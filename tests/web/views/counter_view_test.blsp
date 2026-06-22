@@ -41,11 +41,14 @@
   ; .bml-template view and the inline one (which uses a dynamic class + dynamic children).
   (test "template view (.bml)"
     (let (spec (counter/live-spec))
-      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) {:count 5 :fast 1 :slow 2}))
+      (assert= (web/parts/interleave (get spec :render-static)
+                 ((get spec :render-dynamic) {:count 5 :fast 1 :slow 2}))
         (live-render spec {:count 5 :fast 1 :slow 2}))
-      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) {:count -7 :fast 0 :slow 0}))
+      (assert= (web/parts/interleave (get spec :render-static)
+                 ((get spec :render-dynamic) {:count -7 :fast 0 :slow 0}))
         (live-render spec {:count -7 :fast 0 :slow 0}))))
   (test "inline view"
     (let (spec (counter-inline/live-spec))
-      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) {:count -1 :fast 3 :slow 9}))
+      (assert= (web/parts/interleave (get spec :render-static)
+                 ((get spec :render-dynamic) {:count -1 :fast 3 :slow 9}))
         (live-render spec {:count -1 :fast 3 :slow 9})))))

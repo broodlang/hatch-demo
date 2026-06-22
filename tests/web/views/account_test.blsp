@@ -36,7 +36,9 @@
   (let (g (request app-router "GET" "/account")
         cookie (session-cookie g)
         tok (csrf-token cookie))
-    (request app-router "POST" "/account"
+    (request app-router
+      "POST"
+      "/account"
       {:headers {:content-type "application/x-www-form-urlencoded"
                  :cookie (str "_hatch_session=" cookie)}
        :body (str "name=" name "&_csrf_token=" tok)})))
@@ -53,7 +55,9 @@
   (test "a POST without a CSRF token is rejected with 403"
     (let (g (request app-router "GET" "/account")
           cookie (session-cookie g)
-          resp (request app-router "POST" "/account"
+          resp (request app-router
+                 "POST"
+                 "/account"
                  {:headers {:content-type "application/x-www-form-urlencoded"
                             :cookie (str "_hatch_session=" cookie)}
                   :body "name=Ada"}))
