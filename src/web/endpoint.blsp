@@ -110,11 +110,25 @@
   \"separate\" (an `in` line on arrival + an `out` line on completion), else true."
   (not (= (getenv "LOG_COMBINE") "separate")))
 
+(defn tls-config ()
+  "The server's TLS config — `{:cert <pem> :key <pem>}` to serve HTTPS, or nil (plaintext).
+  Precedence: explicit PEM files in $TLS_CERT_FILE/$TLS_KEY_FILE (production); else, in dev
+  with $HATCH_TLS set, a generated self-signed localhost cert (zero-config dev HTTPS); else
+  plaintext. So dev stays plain HTTP by default — opt into dev TLS with HATCH_TLS=1."
+  (let (cert-file (getenv "TLS_CERT_FILE")
+        key-file (getenv "TLS_KEY_FILE"))
+    (cond
+      (and cert-file key-file) {:cert (slurp cert-file) :key (slurp key-file)}
+      (and (dev?) (getenv "HATCH_TLS")) (let ([cert key] (tls-self-signed "localhost"))
+                                          {:cert cert :key key})
+      else nil)))
+
 (defn serve ()
   "Start the web server on this endpoint's port: HTTP requests are bridged through
-  the router, WebSocket upgrades go to the live-view dispatcher. In dev, also start the
-  asset watcher so CSS rebuilds on save (and hot-swaps over open sockets). Returns the
-  listener pid."
+  the router, WebSocket upgrades go to the live-view dispatcher. Serves HTTPS when
+  `tls-config` yields a cert/key (see it for the env knobs). In dev, also start the asset
+  watcher so CSS rebuilds on save (and hot-swaps over open sockets). Returns the listener
+  pid."
   (when (dev?) (assets/ensure *assets*))
   (req-log/start-req-log {:combine? (combine-logs?)})
-  (server/start (port) adapter (live/live-dispatcher)))
+  (server/start (port) adapter (live/live-dispatcher) {:tls (tls-config)}))
