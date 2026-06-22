@@ -35,7 +35,7 @@
   (unmount (model) (presence/untrack topic))
 
   (render (model)
-    [:div {:data-live "/presence" :class "space-y-6"}
+    [:div {:class "space-y-6"}
       [:div {:class "prose"}
         [:h1 {:class "text-2xl font-bold"} "Live presence · who's here"]
         [:p {:class "opacity-70"}
