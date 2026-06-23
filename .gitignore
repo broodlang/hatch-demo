@@ -6,3 +6,8 @@
 
 # Generated stylesheet — built from assets/app.css by bin/tailwindcss.
 /static/app.css
+
+# Content-fingerprinted assets + manifest — produced by the release build
+# (web/assets/fingerprint); regenerable, not committed.
+/static/app.*.css
+/static/cache-manifest

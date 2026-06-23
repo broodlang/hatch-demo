@@ -31,6 +31,10 @@
   {:watchers [{:cmd ["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--watch"]
                :reload-on "Done in"}]
    :build [["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--minify"]]
+   ; After the release build, content-fingerprint app.css → app.<sha>.css + a cache-manifest
+   ; (web/assets/fingerprint). The layout links it via static/asset-path, so prod serves the
+   ; fingerprinted, immutable, cache-forever URL; dev skips this and serves the plain path.
+   :fingerprint {:dir "static" :files ["app.css"]}
    ; First-run setup, so `nest run` in dev needs no manual `bin/setup`: assets/ensure
    ; runs :install when :install-probe (the bundler binary) is missing, then a one-shot
    ; :build, then the watcher — see web/assets/ensure. bin/setup downloads the Tailwind
@@ -127,8 +131,11 @@
   "Start the web server on this endpoint's port: HTTP requests are bridged through
   the router, WebSocket upgrades go to the live-view dispatcher. Serves HTTPS when
   `tls-config` yields a cert/key (see it for the env knobs). In dev, also start the asset
-  watcher so CSS rebuilds on save (and hot-swaps over open sockets). Returns the listener
+  watcher so CSS rebuilds on save (and hot-swaps over open sockets); in prod, build +
+  fingerprint assets once (fail-loud) before taking the first request. Returns the listener
   pid."
-  (when (dev?) (assets/ensure *assets*))
+  (if (dev?)
+    (assets/ensure *assets*)
+    (assets/build *assets*))
   (req-log/start-req-log {:combine? (combine-logs?)})
   (server/start (port) adapter (live/live-dispatcher) {:tls (tls-config)}))
