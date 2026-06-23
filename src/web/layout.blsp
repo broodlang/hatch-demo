@@ -2,11 +2,16 @@
 (defmodule web/layout
   "The shared HTML document shell: a daisyUI navbar plus the page body. Views call
   `(layout title & children)` and wrap the result with `html`. Styling comes from
-  Tailwind + daisyUI, built into /static/app.css by the asset watcher (see web/endpoint
-  and bin/setup) — this module just links it. It carries no live-view wiring: the
+  Tailwind + daisyUI, built into static/app.css by the asset watcher (see web/endpoint
+  and bin/setup); this module links it by logical name via `static/asset-path`, so prod
+  serves the fingerprinted, cache-forever URL and dev the plain one. It carries no
+  live-view wiring: the
   router's `(live …)` clause injects the live-view client + status chrome into live
   pages, so plain pages (like the home page) stay plain."
-  (:use web/template))
+  (:use web/template)
+  ; asset-path — link app.css by logical name; prod resolves it to the fingerprinted,
+  ; cache-forever URL, dev to the plain (revalidated) path
+  (:alias web/static))
 (defn nav-link (href label)
   "A live-navigable link (`data-nav`): from a live page, clicking another live view swaps
   it over the open socket (no reload); a non-live target falls back to a normal load."
@@ -59,7 +64,7 @@
       [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
       [:title {} title]
-      (stylesheet "/static/app.css")]
+      (stylesheet (static/asset-path "app.css"))]
     [:body {:class "min-h-screen bg-base-100 text-base-content"}
       (raw *nav-html*)
       [:main {:class "max-w-3xl mx-auto p-6"} children]]])
