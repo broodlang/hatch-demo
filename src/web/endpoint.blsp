@@ -131,11 +131,18 @@
   "Start the web server on this endpoint's port: HTTP requests are bridged through
   the router, WebSocket upgrades go to the live-view dispatcher. Serves HTTPS when
   `tls-config` yields a cert/key (see it for the env knobs). In dev, also start the asset
-  watcher so CSS rebuilds on save (and hot-swaps over open sockets); in prod, build +
-  fingerprint assets once (fail-loud) before taking the first request. Returns the listener
-  pid."
+  watcher so CSS rebuilds on save (and hot-swaps over open sockets). In prod, content-
+  fingerprint the already-built assets (so the layout's `asset-path` resolves to immutable
+  URLs) — this only hashes static/app.css, it does NOT re-run the bundler, so a slim runtime
+  image (CSS built in CI, no `bin/tailwindcss`) boots fine; a missing build degrades to plain
+  URLs rather than crashing. Returns the listener pid."
   (if (dev?)
     (assets/ensure *assets*)
-    (assets/build *assets*))
+    (when (get *assets* :fingerprint)
+      (try
+        (assets/fingerprint (get *assets* :fingerprint))
+        (catch e
+          (println (str "[assets] prod fingerprint skipped (" (error-message e)
+                     "); serving plain asset URLs"))))))
   (req-log/start-req-log {:combine? (combine-logs?)})
   (server/start (port) adapter (live/live-dispatcher) {:tls (tls-config)}))
