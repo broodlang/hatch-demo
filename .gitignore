@@ -11,3 +11,6 @@
 # (web/assets/fingerprint); regenerable, not committed.
 /static/app.*.css
 /static/cache-manifest
+
+# Crash dump appended by the panic hook — local debug artifact, not committed.
+/.brood_crash_dump
