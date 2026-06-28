@@ -4,7 +4,8 @@
   (:use log :only [start-logger fn-backend])
   ; json-encode — the opt-in JSON log format (LOG_FORMAT=json)
   (:use json :only [json-encode])
-  (:alias db))
+  (:alias db)
+  (:alias pg))
 
 (defn log-level ()
   "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the
@@ -64,6 +65,6 @@
 (defn main ()
   "Start logging, open the DB pool + migrate, boot the endpoint, and park."
   (start-logger {:level (log-level) :backends [(log-backend)]})
-  (db/start (db/opts))
+  (db/start (pg/opts-from-env "hatch_demo"))
   (serve)
   (receive (:shutdown nil)))
