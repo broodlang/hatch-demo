@@ -1,70 +1,13 @@
 (defmodule main
-  "Entry point: start logging, open the DB pool, and boot the web endpoint."
+  "Entry point for hatch-demo."
   (:use web/endpoint :only [serve])
-  (:use log :only [start-logger fn-backend])
-  ; json-encode — the opt-in JSON log format (LOG_FORMAT=json)
-  (:use json :only [json-encode])
+  (:use web/application :only [start default-logger-opts])
   (:alias db)
   (:alias pg))
 
-(defn log-level ()
-  "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the
-  per-request debug lines show out of the box."
-  (keyword (or (getenv "LOG_LEVEL") "debug")))
-
-; Level keyword -> labels for the two formats.
-(def main--labels {:debug "DEBUG" :info "INFO" :warn "WARN" :error "ERROR"})
-(def main--lower {:debug "debug" :info "info" :warn "warn" :error "error"})
-
-; ANSI colors per level for the text format (dim/cyan/yellow/red); reset closes the run.
-(def main--colors {:debug "\x1b[90m" :info "\x1b[36m" :warn "\x1b[33m" :error "\x1b[31m"})
-(def main--reset "\x1b[0m")
-
-(defn line-body (rec)
-  "The `[LEVEL] msg` body of a human-readable log line (no newline). No epoch timestamp
-  in the prefix — it read like a second id next to the request-id, and a log
-  shipper/terminal adds its own clock; the unix-ms `:ts` is still emitted in JSON mode."
-  (str "[" (or (get main--labels (get rec :level)) "?") "] " (get rec :msg)))
-
-(defn text-line (rec)
-  "A plain (uncolored) human-readable log line plus a newline."
-  (str (line-body rec) "\n"))
-
-(defn color-line (rec)
-  "A human-readable log line colored by level — the whole line takes the level's ANSI
-  color (dim debug, cyan info, yellow warn, red error) so errors/warnings stand out."
-  (str (or (get main--colors (get rec :level)) "") (line-body rec) main--reset "\n"))
-
-(defn json-line (rec)
-  "Format a log record as one JSON object per line (NDJSON) — the shape Grafana Loki
-  (`| json`), Datadog (auto-parsed), and AppSignal ingest as fields. `:msg` becomes
-  `message` (the platforms' log-body attribute), `:ts` a unix-ms `timestamp`, the level
-  its own `level` field, and every structured field on `:meta` (request_id / method /
-  path / status_code / duration_ms / event …) is flattened alongside. The base fields win
-  over `:meta` on any clash, so a caller can't shadow them."
-  (str (json-encode (merge (get rec :meta)
-                      {:timestamp (get rec :ts)
-                       :level (or (get main--lower (get rec :level)) "info")
-                       :message (get rec :msg)}))
-    "\n"))
-
-(defn color-logs? ()
-  "Colorize the text format unless $NO_COLOR is set (the no-color.org convention)."
-  (nil? (getenv "NO_COLOR")))
-
-(defn log-backend ()
-  "The configured backend, written to stdout: one JSON line per record when $LOG_FORMAT
-  is \"json\" (for Grafana / Datadog / AppSignal), else human-readable text — colored by
-  level unless $NO_COLOR is set (JSON is never colored, so parsers stay clean)."
-  (let (fmt (cond
-              (= (getenv "LOG_FORMAT") "json") json-line
-              (color-logs?) color-line
-              else text-line))
-    (fn-backend (fn (line) (print line)) {:format fmt})))
-
 (defn main ()
-  "Start logging, open the DB pool + migrate, boot the endpoint, and park."
-  (start-logger {:level (log-level) :backends [(log-backend)]})
-  (db/start (pg/opts-from-env "hatch_demo"))
-  (serve)
-  (receive (:shutdown nil)))
+  "Start logging, open the DB pool, boot the endpoint, and park."
+  (start
+    {:logger   (default-logger-opts)
+     :children [(fn () (db/start (pg/opts-from-env "hatch_demo")))
+                (fn () (serve))]}))
