@@ -1,0 +1,26 @@
+;; Pure rendering tests for web/views/messages — no database required.
+;; The DB functions (db/all-messages, db/insert-message) are only called
+;; at request time; loading the module is safe because db/*repo* starts nil.
+;;
+;; Integration tests that exercise POST /messages through the real router
+;; require a running Postgres instance (set PGHOST / PGUSER / PGPASSWORD /
+;; PGDATABASE and call db/start before running those tests).
+(defmodule web-views-messages-test
+  (:use test)
+  (:use web/template :only [render])
+  (:use web/views/messages :only [message-list]))
+
+(describe "message-list rendering"
+  (test "empty state shows the invitation text"
+    (is (> (index-of (render (message-list (list))) "No messages yet") -1)))
+  (test "renders a message's name and body"
+    (let (html (render (message-list (list {:id 1 :name "Ada" :body "Hello from Ada!"}))))
+      (is (> (index-of html "Ada") -1))
+      (is (> (index-of html "Hello from Ada!") -1))))
+  (test "renders multiple messages"
+    (let (html (render (message-list (list {:id 1 :name "Ada" :body "First"}
+                                          {:id 2 :name "Grace" :body "Second"}))))
+      (is (> (index-of html "Ada") -1))
+      (is (> (index-of html "Grace") -1))
+      (is (> (index-of html "First") -1))
+      (is (> (index-of html "Second") -1)))))

@@ -1,0 +1,32 @@
+(defmodule db-setup
+  "Create the app database if absent, then run schema migrations.
+  Run with: `nest run --main db-setup`"
+  (:alias repo)
+  (:alias pg)
+  (:alias db))
+
+(defn db-exists? (admin-repo dbname)
+  "Return true if `dbname` is already registered in pg_database."
+  (let (rows (repo/exec admin-repo
+               "SELECT 1 FROM pg_database WHERE datname = $1" [dbname]))
+    (not (empty? rows))))
+
+(defn create-db (admin-repo dbname)
+  "Issue CREATE DATABASE (can't be parameterized — name is from a trusted env var)."
+  (repo/exec admin-repo (str "CREATE DATABASE " dbname) []))
+
+(defn main ()
+  (let (o (db/opts)
+        dbname (get o :database)
+        admin-opts (assoc o :database "postgres" :size 1)
+        admin (repo/open (pg/adaptor) admin-opts))
+    (if (db-exists? admin dbname)
+      (println (str "Database '" dbname "' already exists."))
+      (do
+        (println (str "Creating database '" dbname "'..."))
+        (create-db admin dbname)
+        (println "Created.")))
+    (repo/close admin)
+    (println "Running migrations...")
+    (db/start o)
+    (println "Done. Run `nest run` to start the server.")))

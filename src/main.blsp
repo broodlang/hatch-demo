@@ -1,9 +1,10 @@
 (defmodule main
-  "Entry point: start logging and boot the web endpoint (which owns its port)."
+  "Entry point: start logging, open the DB pool, and boot the web endpoint."
   (:use web/endpoint :only [serve])
   (:use log :only [start-logger fn-backend])
   ; json-encode — the opt-in JSON log format (LOG_FORMAT=json)
-  (:use json :only [json-encode]))
+  (:use json :only [json-encode])
+  (:alias db))
 
 (defn log-level ()
   "Minimum log level from $LOG_LEVEL (debug/info/warn/error), else :debug so the
@@ -61,7 +62,8 @@
     (fn-backend (fn (line) (print line)) {:format fmt})))
 
 (defn main ()
-  "Start logging, boot the endpoint, and keep the process alive."
+  "Start logging, open the DB pool + migrate, boot the endpoint, and park."
   (start-logger {:level (log-level) :backends [(log-backend)]})
+  (db/start (db/opts))
   (serve)
   (receive (:shutdown nil)))

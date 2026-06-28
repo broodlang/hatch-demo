@@ -46,6 +46,7 @@
       (nav-dropdown "Pages"
         [:li {} (nav-link "/page-inline" "Page (inline)")]
         [:li {} (nav-link "/page-template" "Page (template)")])
+      [:a {:href "/messages" :data-nav true :class "btn btn-ghost btn-sm"} "Messages"]
       [:a {:href "/account" :data-nav true :class "btn btn-ghost btn-sm"} "Account"]
       [:a {:href "/slow" :data-nav true :class "btn btn-ghost btn-sm"} "Slow"]
       [:a {:href "/dev" :data-nav true :class "btn btn-ghost btn-sm"} "Dev"]]])
