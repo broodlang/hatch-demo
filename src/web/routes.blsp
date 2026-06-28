@@ -36,7 +36,10 @@
   ; and rejects a POST whose token doesn't match. `save` does POST→redirect→GET.
   (through [(session/fetch-session session-secret) session/fetch-flash csrf/protect-from-forgery]
     (get "/account" web/views/account/index)
-    (post "/account" web/views/account/save))
+    (post "/account" web/views/account/save)
+    ; Postgres-backed message board: GET lists + shows form, POST inserts + redirects.
+    (get "/messages" web/views/messages/index)
+    (post "/messages" web/views/messages/create))
   ; Live views (web/live), grouped into two live-sessions — the socket-side auth
   ; boundary. The same view module is mounted at distinct paths per session: navigating
   ; within a session swaps over the open socket (no reload); crossing into the other

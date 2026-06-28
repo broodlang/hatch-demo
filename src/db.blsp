@@ -1,0 +1,49 @@
+(defmodule db
+  "Database singleton: the shared repo handle and the messages schema.
+  Call `(db/start opts)` once from `main` before serving; handlers use
+  `(db/all-messages)` and `(db/insert-message row)`. The repo is stored
+  as a module global — set once at startup, read-only thereafter."
+  (:alias repo)
+  (:alias query)
+  (:alias pg))
+
+(def *repo* nil)
+
+(def messages-schema
+  {:table :messages
+   :primary-key :id
+   :fields {:id :serial :name :text :body :text}})
+
+(defn opts ()
+  "Postgres connection opts from $PG* env vars, with development defaults."
+  {:host (or (getenv "PGHOST") "127.0.0.1")
+   :port (string->number (or (getenv "PGPORT") "5432"))
+   :user (or (getenv "PGUSER") "postgres")
+   :password (or (getenv "PGPASSWORD") "postgres")
+   :database (or (getenv "PGDATABASE") "hatch_demo")
+   :size 5})
+
+(defn start (opts)
+  "Open the Postgres connection pool and migrate the messages table.
+  `opts` keys: `:host :port :user :password :database :size`."
+  (def *repo* (repo/open (pg/adaptor) opts))
+  (repo/migrate *repo* messages-schema)
+  ; Fire a SELECT 1 on every connection in parallel, then collect the replies.
+  ; This exercises the full pool→conn→Postgres path before the first HTTP request arrives.
+  (let (size (get opts :size 5)
+        parent (self))
+    (dolist (_ (range size))
+      (spawn (fn ()
+        (try (repo/exec *repo* "SELECT 1" []) (catch _ nil))
+        (send parent [:warmed]))))
+    (dolist (_ (range size))
+      (receive ([:warmed] nil))))
+  :ok)
+
+(defn all-messages ()
+  "All messages, oldest first (id ASC)."
+  (repo/all *repo* (-> (query/from :messages) (query/order-by :id :asc))))
+
+(defn insert-message (row)
+  "Insert a `{:name … :body …}` map; return the inserted row (with auto-assigned `:id`)."
+  (repo/insert *repo* :messages row))

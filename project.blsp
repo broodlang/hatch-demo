@@ -8,7 +8,8 @@
 (project
   :name "hatch-demo"
   :version "0.1.0"
-  :dependencies [[hatch :path "../hatch"]]
+  :dependencies [[hatch :path "../hatch"]
+                 [store-postgres :path "../store-postgres"]]
   ;; Pull in Hatch's formatter rules (its :format-headers) so `nest format` indents
   ;; deflive / on / tick / mount / render with the signature on the head line.
   :format-plugins [hatch])
