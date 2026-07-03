@@ -1,7 +1,7 @@
 <div class="space-y-6">
   <div class="card bg-base-200">
     <div class="card-body">
-      <h2 class="card-title">Click counter · template (.bml)</h2>
+      <h2 class="card-title">Click counters · templates (.bml)</h2>
       <div class="text-6xl font-bold {(if (< @count 0) "text-error" "text-base-content")}">{@count}</div>
       <div class="flex gap-2 mt-2">
         <button data-event="decrement" class="btn btn-outline btn-lg">−</button>
@@ -11,7 +11,7 @@
   </div>
   <div class="stats stats-vertical sm:stats-horizontal shadow w-full">
     <div class="stat">
-      <div class="stat-title">Fast ticker</div>
+      <div class="stat-title">Fasts ticker</div>
       <div class="stat-value">{@fast}</div>
       <div class="stat-desc">server pushes +1 every second</div>
     </div>
