@@ -8,7 +8,8 @@
 (defmodule web-views-messages-test
   (:use test)
   (:use web/template :only [render])
-  (:use web/views/messages :only [message-list]))
+  (:use web/views/messages :only [message-list error-summary])
+  (:alias web/form))
 
 (describe "message-list rendering"
   (test "empty state shows the invitation text"
@@ -23,4 +24,21 @@
       (is (> (index-of html "Ada") -1))
       (is (> (index-of html "Grace") -1))
       (is (> (index-of html "First") -1))
-      (is (> (index-of html "Second") -1)))))
+      (is (> (index-of html "Second") -1))))
+  (test "each message's name links to /messages/:id (the path-param demo)"
+    (let (html (render (message-list (list {:id 42 :name "Ada" :body "Hi"}))))
+      (is (> (index-of html "href=\"/messages/42\"") -1)))))
+
+(describe "create's validation (web/form)"
+  (test "a blank name or body fails web/form's required? rule"
+    (is (= (form/required? "") false))
+    (is (= (form/required? "Ada") true)))
+  (test "the name pattern rule allows letters, digits, and spaces"
+    (is (= ((form/matches-pattern? "(\\w|\\s)+") "Ada Lovelace 2") true)))
+  (test "the name pattern rule rejects punctuation"
+    (is (= ((form/matches-pattern? "(\\w|\\s)+") "Ada!") false)))
+  (test "error-summary joins every field's message"
+    (is (= (error-summary {"name" "Name is required."}) "Name is required."))
+    (is (= (error-summary {"name" "Name is required." "body" "Message is required."})
+          "Name is required. Message is required."))
+    (is (= (error-summary {}) ""))))

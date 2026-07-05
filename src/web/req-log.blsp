@@ -1,8 +1,8 @@
 ; A pairing logger for the endpoint's per-request log. A request is tracked from the
 ; moment it arrives until the handler reports back. Each lifecycle event is built as a
 ; *record* (`{:level :msg :meta}`) by a pure builder below, so the same shape is logged
-; at runtime and asserted in tests; the backend (see web/main) renders records as either
-; human text or JSON. Two knobs:
+; at runtime and asserted in tests; the backend (see web/application's default-logger-opts,
+; in hatch) renders records as either human text or JSON. Two knobs:
 ;  - combine? (default true): one folded line per request (`[rid] GET / -> 200 in 4.2ms`,
 ;    held until done). When false, an `in` line is logged on arrival and an `out` line on
 ;    completion — two correlated lines (request_id ties them).
@@ -15,7 +15,8 @@
   `(fail rid status ms err)`) once it's done. Each event is a record built by a pure
   builder (`start-record` / `done-record` / `error-record` / `pending-record`) carrying a
   human `:msg` and machine `:meta` (request_id / method / path / status_code /
-  duration_ms / event); web/main's backend renders them as text or JSON.
+  duration_ms / event); web/application's default-logger-opts backend renders them as
+  text or JSON.
 
   A `proc/gen` process owns the in-flight map (async, never blocks the caller). With
   `combine?` true (default) the request is held and emitted as one line on completion;

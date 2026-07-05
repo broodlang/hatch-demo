@@ -5,7 +5,7 @@
   (:alias repo)
   (:alias query)
   (:alias pg)
-  (:alias web/repo))
+  (:alias web/repo :as web-repo))
 
 (def *repo* nil)
 
@@ -16,11 +16,15 @@
 
 (defn start (opts)
   "Open the Postgres pool, migrate the messages table, and warm up the connections."
-  (def *repo* (web/repo/start (pg/adaptor) opts [messages-schema])))
+  (def *repo* (web-repo/start (pg/adaptor) opts [messages-schema])))
 
 (defn all-messages ()
   "All messages, oldest first (id ASC)."
   (repo/all *repo* (-> (query/from :messages) (query/order-by :id :asc))))
+
+(defn get-message (id)
+  "The message with `id`, or nil if none — backs the /messages/:id path-param demo."
+  (repo/one *repo* (-> (query/from :messages) (query/where [:= :id id]))))
 
 (defn insert-message (row)
   "Insert a `{:name … :body …}` map; return the inserted row (with auto-assigned `:id`)."

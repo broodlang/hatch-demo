@@ -1,7 +1,8 @@
 (defmodule web/views/room
   "A real-time room — the PubSub demo. Every connected client subscribes to one topic in
-  `mount`; a click broadcasts to that topic, and every subscriber (all open tabs/clients)
-  receives it via `handle-info` and re-renders. Open this page in two browsers and a wave in
+  `mount`; a click updates the waver's own log immediately (optimistic — no round trip
+  needed for your own action) and `broadcast-from`s to every *other* subscriber, who each
+  receive it via `handle-info` and re-render. Open this page in two browsers and a wave in
   one shows up in the other instantly — no polling, no reload. This is the foundation
   presence builds on. Wired with `(live \"/room\" …)`."
   ; deflive
@@ -31,14 +32,18 @@
   ; (self) — captured by pubsub/subscribe — is this session's pid, the broadcast target.
   (mount (params) (do (pubsub/subscribe topic) (init)))
 
-  ; A wave doesn't touch the local model directly — it broadcasts to the topic, and the
-  ; broadcast comes back to *every* subscriber (including this one) through handle-info.
-  ; One code path updates everyone, so all clients stay in sync.
+  ; The waver updates their own log directly (no need to wait on a round trip for your
+  ; own action) and broadcast-froms everyone *else* — the sender is excluded, so this
+  ; wave is recorded exactly once locally, not twice (once here, once via the echo a
+  ; plain broadcast would also have delivered back to the sender through handle-info).
   (on "wave" (params model)
-    (do (pubsub/broadcast topic {:from (get model :id)}) model))
+    (do
+      (pubsub/broadcast-from topic {:from (get model :id)})
+      (record model "You waved 👋")))
 
-  ; A broadcast arrives here on every subscribed session. `msg` is the payload map passed
-  ; to broadcast (in-process — no JSON), so its keys are keywords.
+  ; A broadcast-from arrives here on every *other* subscribed session (never the sender's
+  ; own). `msg` is the payload map passed to broadcast-from (in-process — no JSON), so its
+  ; keys are keywords.
   (handle-info (msg model)
     (record model (str "visitor " (get msg :from) " waved 👋")))
 

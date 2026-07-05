@@ -3,30 +3,41 @@
   button); each row carries a stable `data-key` and holds a text `<input>`. Type into a box
   and watch the row move under you — with keyed morphing the client MOVES the existing input
   node, so your focus, caret, and typed text ride along; without keys the input would be
-  rebuilt at its new index and you'd lose all three. Wired with `(live \"/reorder\" …)`."
+  rebuilt at its new index and you'd lose all three. Wired with `(live \"/reorder\" …)`.
+
+  Also demonstrates `handle-params` (live-patch): each row's \"Highlight\" link patches
+  `?highlight=<id>` into the URL — no remount, so the 3s rotation tick keeps running and
+  any in-progress typing elsewhere on the page is untouched, unlike a full live-navigate."
   ; deflive
   (:use web/live)
   (:implements LiveModule))
 
-(defn init ()
-  "Four rows, each with a stable id used as the morph key."
+(defn init (highlight)
+  "Four rows, each with a stable id used as the morph key. `highlight` (from the initial
+  mount params, or a later live-patch) marks one row, or nil for none."
   {:items (list {:id "ada" :name "Ada"}
             {:id "linus" :name "Linus"}
             {:id "grace" :name "Grace"}
-            {:id "alan" :name "Alan"})})
+            {:id "alan" :name "Alan"})
+   :highlight highlight})
 
 (defn rotate (items)
   "Move the first item to the end — a reorder that shifts every row's position."
   (if (empty? items) items (concat (rest items) (list (first items)))))
 
 (deflive
-  (mount (params) (init))
+  (mount (params) (init (get params "highlight" nil)))
 
   ; A server-driven reorder every 3s — no click, so it fires while you're typing in a box,
   ; which is exactly when focus preservation matters.
   (tick 3000 (model) (assoc model :items (rotate (get model :items))))
 
   (on "rotate" (params model) (assoc model :items (rotate (get model :items))))
+
+  ; live-patch: a row's "Highlight" link patches ?highlight=<id> into the URL — no
+  ; remount, so the tick above keeps running (rotate every 3s) right across it, unlike a
+  ; full live-navigate, which would restart it.
+  (handle-params (params model) (assoc model :highlight (get params "highlight" nil)))
 
   (render (model)
     [:div {:class "space-y-6"}
@@ -37,13 +48,22 @@
           "keyed DOM morphing your cursor and text stay put as the row moves. Each row is "
           "keyed by a stable "
           [:code {:class "badge badge-ghost"} "data-key"]
-          "."]]
+          ". Click \"Highlight\" on a row to live-patch "
+          [:code {:class "badge badge-ghost"} "?highlight=…"]
+          " into the URL — no remount, so the rotation above never skips a beat."]]
       [:button {:data-event "rotate" :class "btn btn-sm"} "Rotate now"]
       [:div {:class "space-y-2"}
         (map (fn (it)
                [:div {:data-key (get it :id)
-                      :class "flex items-center gap-3 card bg-base-200 p-3"}
+                      :class (str "flex items-center gap-3 card p-3 "
+                               (if (= (get it :id) (get model :highlight))
+                                 "bg-primary text-primary-content"
+                                 "bg-base-200"))}
                  [:span {:class "badge badge-primary w-20"} (get it :name)]
                  [:input {:placeholder "type here — keep focus through a reorder…"
-                          :class "input input-bordered input-sm flex-1"}]])
+                          :class "input input-bordered input-sm flex-1"}]
+                 [:a {:href (str "/reorder?highlight=" (get it :id))
+                      :data-patch true
+                      :class "btn btn-xs"}
+                   "Highlight"]])
           (get model :items))]]))

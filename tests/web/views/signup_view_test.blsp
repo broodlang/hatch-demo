@@ -5,16 +5,36 @@
   ; live-mount / live-event / live-render — from the dep
   (:use web/test)
   (:alias web/views/signup)
+  ; email? — signup's rules are built on web/form now, not its own hand-rolled check
+  (:alias web/form)
   (:use test))
 
 (def *empty* {:name "" :email "" :attempted? false :submitted? false})
 
-(describe "validation helpers"
-  (test "valid email passes" (assert= (signup/valid-email? "ada@example.com") true))
-  (test "no @ fails" (assert= (signup/valid-email? "nope") false))
-  (test "no dotted domain fails" (assert= (signup/valid-email? "a@b") false))
-  (test "trailing dot fails" (assert= (signup/valid-email? "a@b.") false))
-  (test "spaces fail" (assert= (signup/valid-email? "a b@c.d") false)))
+(describe "validation helpers (web/form, wired into signup's rules)"
+  (test "valid email passes" (assert= (form/email? "ada@example.com") true))
+  (test "no @ fails" (assert= (form/email? "nope") false))
+  (test "no dotted domain fails" (assert= (form/email? "a@b") false))
+  (test "trailing dot fails" (assert= (form/email? "a@b.") false))
+  (test "spaces fail" (assert= (form/email? "a b@c.d") false)))
+
+(describe "the name field's two rules (required?, then min-length? 2)"
+  ; error text only shows post-submit (attempted?) — the demo's intentional "no eager
+  ; errors on every keystroke" UX — so drive it through "submit", not a bare "validate".
+  (test "a blank name shows \"required\", not \"too short\", after a failed submit"
+    (let (spec (signup/live-spec)
+          m0 (live-event spec "validate" {"field" "name" "value" ""} *empty*)
+          m1 (live-event spec "submit" {} m0))
+      (assert= (includes? (live-render spec m1) "Name is required.") true)))
+  (test "a 1-character name shows the min-length message, not \"required\", after a failed submit"
+    (let (spec (signup/live-spec)
+          m0 (live-event spec "validate" {"field" "name" "value" "A"} *empty*)
+          m1 (live-event spec "submit" {} m0))
+      (assert= (includes? (live-render spec m1) "at least 2 characters") true)))
+  (test "a 2+ character name is ok, even before a submit"
+    (let (spec (signup/live-spec)
+          m (live-event spec "validate" {"field" "name" "value" "Al"} *empty*))
+      (assert= (includes? (live-render spec m) "Looks good") true))))
 
 (describe "signup live view"
   (test "mount starts empty"

@@ -1,12 +1,14 @@
 (defmodule web/views/signup
-  "A live form (web/live) with as-you-type validation feedback. Each keystroke pushes a
-  `validate` event over the socket (via the client's `input` listener), the server
-  re-renders, and the DOM morph patches the feedback in place — the inputs keep their focus
-  and caret because the view never renders a `value` attribute (the DOM owns what the user
-  typed). The model is kept current on every keystroke, so `submit` just trusts the model
-  and, when valid, swaps in a confirmation panel. Wired with `(live \"/signup\" …)`."
-  ; deflive
+  "A live form (web/live) with as-you-type validation feedback, built on `web/form`. Each
+  keystroke pushes a `validate` event over the socket (via the client's `input` listener),
+  the server re-renders, and the DOM morph patches the feedback in place — the inputs keep
+  their focus and caret because the view never renders a `value` attribute (the DOM owns
+  what the user typed). The model is kept current on every keystroke, so `submit` just
+  trusts the model and, when valid, swaps in a confirmation panel. Wired with
+  `(live \"/signup\" …)`."
   (:use web/live)
+  ; validate / error-for — this view's rules are just [:field validator message] triples
+  (:alias web/form)
   (:implements LiveModule))
 ; ---- model + validation ----
 
@@ -22,20 +24,22 @@
     (= field "email") (assoc model :email value)
     else model))
 
-(defn valid-email? (s)
-  "A deliberately simple email check: one `@` with text before it and a dotted domain
-  after (the dot not last), and no spaces. Enough to demo live feedback, not RFC 5322."
-  (let (at (index-of s "@"))
-    (and (> at 0)
-      (= (index-of s " ") -1)
-      (let (domain (substring s (+ at 1) (string-length s)))
-        (and (= (index-of domain "@") -1)
-          (> (index-of domain ".") 0)
-          (< (index-of domain ".") (- (string-length domain) 1)))))))
+(def rules
+  ; two rules on :name — required? first, so a blank name shows "required" rather than
+  ; "too short" (validate keeps only the first failing rule per field)
+  [[:name form/required? "Name is required."]
+   [:name (form/min-length? 2) "Name must be at least 2 characters."]
+   [:email form/email? "Hmm, that doesn't look like an email."]])
 
-(defn name-ok? (model) (not (blank? (get model :name))))
-(defn email-ok? (model) (valid-email? (get model :email)))
-(defn form-valid? (model) (and (name-ok? model) (email-ok? model)))
+(defn errors (model)
+  "The `{field message}` map for `model` — `{}` when every rule passes."
+  (match (form/validate model rules)
+    ([:ok _] {})
+    ([:error errs] errs)))
+
+(defn name-ok? (model) (nil? (form/error-for (errors model) :name)))
+(defn email-ok? (model) (nil? (form/error-for (errors model) :email)))
+(defn form-valid? (model) (= (count (errors model)) 0))
 
 ; ---- live view ----
 
@@ -99,16 +103,16 @@
   (cond
     (name-ok? model) (feedback-line "text-success"
                        (str "Looks good — " (string-length (get model :name)) " characters."))
-    (get model :attempted?) (feedback-line "text-error" "Name is required.")
+    (get model :attempted?) (feedback-line "text-error" (form/error-for (errors model) :name))
     else (feedback-line "opacity-60" "Tell us your name.")))
 
 (defn email-feedback (model)
   (cond
     (email-ok? model) (feedback-line "text-success" "That's a valid-looking email ✓")
     (blank? (get model :email)) (if (get model :attempted?)
-                                  (feedback-line "text-error" "Email is required.")
+                                  (feedback-line "text-error" (form/error-for (errors model) :email))
                                   (feedback-line "opacity-60" "We'll only use this to reply."))
-    else (feedback-line "text-error" "Hmm, that doesn't look like an email.")))
+    else (feedback-line "text-error" (form/error-for (errors model) :email))))
 
 (defn signup-success (model)
   [:div {:class "card bg-success text-success-content"}

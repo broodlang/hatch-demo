@@ -11,7 +11,21 @@
   (:use web/template)
   ; asset-path — link app.css by logical name; prod resolves it to the fingerprinted,
   ; cache-forever URL, dev to the plain (revalidated) path
-  (:alias web/static))
+  (:alias web/static)
+  ; get-flash — flash-banner reads both the "info" and "error" one-shot keys
+  (:alias web/session))
+
+(defn flash-banner (conn)
+  "A one-shot `info`/`error` banner from the session flash, as a daisyUI alert, or nothing
+  when there's no flash. `error` (a failed web/form validation, typically) wins if both are
+  set — shared by every plain-page view with a flash-driven form (account, messages)
+  instead of each hand-rolling the same info/error/none cond."
+  (let (info (session/get-flash conn "info")
+        err (session/get-flash conn "error"))
+    (cond
+      err [:div {:class "alert alert-error mb-4"} [:span {} err]]
+      info [:div {:class "alert alert-success mb-4"} [:span {} info]]
+      else "")))
 (defn nav-link (href label)
   "A live-navigable link (`data-nav`): from a live page, clicking another live view swaps
   it over the open socket (no reload); a non-live target falls back to a normal load."
@@ -39,7 +53,8 @@
         [:li {} (nav-link "/signup" "Live form")]
         [:li {} (nav-link "/room" "Live room")]
         [:li {} (nav-link "/presence" "Live presence")]
-        [:li {} (nav-link "/reorder" "Keyed list")])
+        [:li {} (nav-link "/reorder" "Keyed list")]
+        [:li {} (nav-link "/dashboard" "Dashboard (guarded)")])
       (nav-dropdown "Admin"
         [:li {} (nav-link "/admin/counter" "Counter")]
         [:li {} (nav-link "/admin/counter-inline" "Counter (inline)")])

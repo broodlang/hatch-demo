@@ -30,18 +30,23 @@
   "The CSRF token stashed in the signed session `cookie`."
   (get (web/session/decode-session session-secret cookie) "_csrf"))
 
-(defn save-name (name)
-  "The full browser flow: GET /account (mints the CSRF token + session cookie), then POST
-  with that cookie and the matching `_csrf_token`. Returns the POST response."
-  (let (g (request app-router "GET" "/account")
-        cookie (session-cookie g)
-        tok (csrf-token cookie))
+(defn save-name-with-cookie (name cookie)
+  "POST /account with `name`, reusing an existing session `cookie` (and its stashed CSRF
+  token) — for a save that follows an earlier one in the same session."
+  (let (tok (csrf-token cookie))
     (request app-router
       "POST"
       "/account"
       {:headers {:content-type "application/x-www-form-urlencoded"
                  :cookie (str "_hatch_session=" cookie)}
        :body (str "name=" name "&_csrf_token=" tok)})))
+
+(defn save-name (name)
+  "The full browser flow: GET /account (mints the CSRF token + session cookie), then POST
+  with that cookie and the matching `_csrf_token`. Returns the POST response."
+  (let (g (request app-router "GET" "/account")
+        cookie (session-cookie g))
+    (save-name-with-cookie name cookie)))
 
 (describe "GET /account"
   (test "renders the form"
@@ -79,4 +84,20 @@
       (assert= (body-contains? g2 "Welcome back, Grace!") true)
       (assert= (body-contains? g2 "Saved! Hi, Grace.") false)))
   (test "a forged session cookie is ignored (signature fails → empty session)"
-    (assert= (body-contains? (get-with "tampered.deadbeef") "know your name yet") true)))
+    (assert= (body-contains? (get-with "tampered.deadbeef") "know your name yet") true))
+  (test "a blank name still clears it (not rejected by validation)"
+    (let (saved (save-name "Grace")
+          c1 (session-cookie saved)
+          cleared (save-name-with-cookie "" c1)
+          c2 (session-cookie cleared)
+          g (get-with c2))
+      (assert= (body-contains? g "Cleared your name.") true)
+      (assert= (body-contains? g "know your name yet") true)))
+  (test "a too-long name is rejected by web/form's max-length? rule, session untouched"
+    (let (long-name (string-repeat "a" 51)
+          resp (save-name long-name)
+          cookie (session-cookie resp)
+          g (get-with cookie))
+      (assert= (status resp) 302)
+      (assert= (body-contains? g "must be 50 characters or fewer") true)
+      (assert= (body-contains? g "know your name yet") true))))
