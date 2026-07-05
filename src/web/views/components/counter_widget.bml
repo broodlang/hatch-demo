@@ -1,0 +1,5 @@
+<div class="flex items-center gap-2">
+  <button data-event="dec" class="btn btn-xs">−</button>
+  <span class="font-mono">{@n}</span>
+  <button data-event="inc" class="btn btn-xs">+</button>
+</div>

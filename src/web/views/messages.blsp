@@ -1,12 +1,20 @@
 (defmodule web/views/messages
   "GET /messages — list all messages and a form to post a new one.
+  GET /messages/:id — a single message, by id (the demo's one named-path-param route —
+  every other route uses no params, a live-patch query param, or `*splat` for statics).
   POST /messages — insert the submitted message and redirect (PRG pattern).
-  Wired through the session + CSRF pipeline in web/routes."
+  Wired through the session + CSRF pipeline in web/routes.
+  `web/layout/flash-banner` renders the one-shot flash (shared with web/views/account,
+  the other flash-driven form)."
   (:use web/page)
   (:use web/layout)
   (:use web/conn)
+  ; raw — the fetch-post-script's inline <script> body, unescaped
+  (:use web/template)
   (:alias web/session)
   (:alias web/csrf)
+  ; validate / error-for — create's required-fields check
+  (:alias web/form)
   (:alias db))
 
 (defn index (conn)
@@ -23,28 +31,42 @@
         (message-list msgs)
         (new-message-form conn)))))
 
-(defn flash-banner (conn)
-  "A one-shot success banner from the flash, or nothing."
-  (let (msg (web/session/get-flash conn "info"))
-    (if (nil? msg)
-      ""
-      [:div {:class "alert alert-success mb-4"} [:span {} msg]])))
-
 (defn message-list (msgs)
-  "Render the list of message cards, or an empty-state prompt."
+  "Render the list of message cards, or an empty-state prompt. Each card's name links to
+  `/messages/:id` — the named-path-param demo."
   (if (empty? msgs)
     [:p {:class "opacity-60 mb-6"} "No messages yet — be the first!"]
     [:div {:class "space-y-3 mb-6"}
       (map (fn (m)
              [:div {:class "card bg-base-200"}
                [:div {:class "card-body py-3"}
-                 [:p {:class "font-semibold"} (get m :name)]
+                 [:a {:href (str "/messages/" (get m :id)) :data-nav true :class "font-semibold link"}
+                   (get m :name)]
                  [:p {} (get m :body)]]])
            msgs)]))
 
+(defn show (conn)
+  "GET /messages/:id — a single message, or a not-found note. The `:id` path segment
+  arrives in `(get conn :params)` as a string; the schema's `:id` column is an integer, so
+  it's parsed before querying."
+  (let (id (string->number (or (param conn "id") "0"))
+        msg (db/get-message id))
+    (page conn
+      (layout "Message"
+        (if (nil? msg)
+          [:p {} (str "No message with id " id ".")]
+          [:div {:class "card bg-base-200"}
+            [:div {:class "card-body"}
+              [:p {:class "font-semibold"} (get msg :name)]
+              [:p {} (get msg :body)]]])
+        [:p {:class "mt-4"} [:a {:href "/messages" :data-nav true :class "link"} "← All messages"]]))))
+
 (defn new-message-form (conn)
-  "The form to post a new message."
-  [:form {:method "post" :action "/messages" :class "card bg-base-200"}
+  "The form to post a new message. Two submit buttons hit the same POST /messages, proving
+  both ways web/csrf accepts a token: a normal submit sends the hidden `_csrf_token` field;
+  \"Post via fetch\" instead sends it as the `X-CSRF-Token` header (protect-from-forgery's
+  fetch/JSON-client path — `web/csrf/submitted-token` accepts either)."
+  [:form {:id "message-form" :method "post" :action "/messages" :class "card bg-base-200"}
     [:div {:class "card-body space-y-3"}
       [:h2 {:class "card-title"} "Post a message"]
       (web/csrf/csrf-input conn)
@@ -54,18 +76,58 @@
       [:textarea {:name "body" :rows "3" :placeholder "Say something…"
                   :class "textarea textarea-bordered w-full"} ""]
       [:div {:class "card-actions"}
-        [:button {:class "btn btn-primary"} "Post"]]]])
+        [:button {:type "submit" :class "btn btn-primary"} "Post"]
+        [:button {:type "button" :id "fetch-post-btn" :class "btn btn-outline"} "Post via fetch"]]]
+    fetch-post-script])
+
+(def fetch-post-script
+  ; Sends the same fields, but as a fetch() with the CSRF token in the X-CSRF-Token
+  ; header instead of the hidden _csrf_token field — the path a JSON/SPA client would
+  ; use, since it has no HTML form to embed a hidden field in.
+  [:script {}
+    (raw "
+      document.getElementById('fetch-post-btn').addEventListener('click', async () => {
+        const form = document.getElementById('message-form');
+        const token = form.querySelector('input[name=_csrf_token]').value;
+        const body = new URLSearchParams({
+          name: form.querySelector('input[name=name]').value,
+          body: form.querySelector('textarea[name=body]').value,
+        });
+        const res = await fetch('/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRF-Token': token,
+          },
+          body,
+        });
+        if (res.redirected) location.href = res.url;
+      });
+    ")])
+
+(def *message-rules*
+  [["name" form/required? "Name is required."]
+   ; letters/digits/spaces only — required? first, so a blank name still reads "required"
+   ; rather than "letters and spaces only" (validate keeps the first failing rule/field)
+   ["name" (form/matches-pattern? "(\\w|\\s)+") "Name may only contain letters, digits, and spaces."]
+   ["body" form/required? "Message is required."]])
+
+(defn error-summary (errs)
+  "Every error message in `errs`, space-joined — there are only ever one or two fields
+  here, so a plain join reads fine without needing per-field placement in the form."
+  (join " " (vals errs)))
 
 (defn create (conn)
-  "POST /messages — validate, insert into Postgres, and PRG-redirect."
+  "POST /messages — validate (web/form), insert into Postgres on success, and PRG-redirect
+  either way (a validation failure flashes the error instead of touching the database)."
   (let (name (or (param conn "name") "")
         body (or (param conn "body") ""))
-    (if (or (blank? name) (blank? body))
-      (-> conn
-        (web/session/put-flash "info" "Name and message are required.")
-        (redirect-resp "/messages"))
-      (do
-        (db/insert-message {:name name :body body})
-        (-> conn
-          (web/session/put-flash "info" "Message posted!")
-          (redirect-resp "/messages"))))))
+    (match (form/validate {"name" name "body" body} *message-rules*)
+      ([:error errs] (-> conn
+                       (web/session/put-flash "error" (error-summary errs))
+                       (redirect-resp "/messages")))
+      ([:ok _] (do
+                 (db/insert-message {:name name :body body})
+                 (-> conn
+                   (web/session/put-flash "info" "Message posted!")
+                   (redirect-resp "/messages")))))))

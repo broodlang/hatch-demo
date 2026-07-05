@@ -39,7 +39,9 @@
     (post "/account" web/views/account/save)
     ; Postgres-backed message board: GET lists + shows form, POST inserts + redirects.
     (get "/messages" web/views/messages/index)
-    (post "/messages" web/views/messages/create))
+    (post "/messages" web/views/messages/create)
+    ; Named path param demo: /messages/:id shows one message.
+    (get "/messages/:id" web/views/messages/show))
   ; Live views (web/live), grouped into two live-sessions — the socket-side auth
   ; boundary. The same view module is mounted at distinct paths per session: navigating
   ; within a session swaps over the open socket (no reload); crossing into the other
@@ -59,7 +61,9 @@
     ; Live presence: who's-here roster that updates as clients join/leave.
     (live "/presence" web/views/presence)
     ; Keyed-morph test: a list that reorders under live inputs, keeping their focus.
-    (live "/reorder" web/views/reorder))
+    (live "/reorder" web/views/reorder)
+    ; on-mount-guard demo: redirects to /account until the session has a saved name.
+    (live "/dashboard" web/views/dashboard))
   (live-session "admin"
     (live "/admin/counter" web/views/counter)
     (live "/admin/counter-inline" web/views/counter-inline))

@@ -1,0 +1,15 @@
+(defmodule web/views/components/counter-widget
+  "A tiny LiveComponent (web/component) whose markup comes from a sibling `.bml` file
+  (`counter_widget.bml`) instead of inline Hiccup — like-button demonstrates the same
+  LiveComponent path with inline `render`; this one proves `(template …)` lowers the
+  same way for a component as it does for a `deflive` view."
+  (:alias web/component)
+  (:implements component/LiveComponentModule))
+
+(component/deflive-component
+  (mount (id assigns) {:n (get assigns "start" 0)})
+
+  (template "counter_widget.bml")
+
+  (on "inc" (params state) (assoc state :n (inc (get state :n))))
+  (on "dec" (params state) (assoc state :n (dec (get state :n)))))

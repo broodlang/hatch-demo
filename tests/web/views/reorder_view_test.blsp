@@ -13,7 +13,9 @@
   (test "rotate of empty is empty"
     (assert= (reorder/rotate (list)) (list)))
   (test "init has four keyed rows"
-    (assert= (count (get (reorder/init) :items)) 4)))
+    (assert= (count (get (reorder/init nil) :items)) 4))
+  (test "init carries the initial highlight through"
+    (assert= (get (reorder/init "grace") :highlight) "grace")))
 
 (describe "reorder live view"
   (test "a tick rotates the rows"
@@ -33,4 +35,20 @@
     (let (spec (reorder/live-spec)
           m (live-mount spec {}))
       (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
-        (live-render spec m)))))
+        (live-render spec m))))
+  (test "mount reads an initial ?highlight= param"
+    (assert= (get (live-mount (reorder/live-spec) {"highlight" "grace"}) :highlight) "grace"))
+  (test "a live-patch updates :highlight without touching :items"
+    (let (spec (reorder/live-spec)
+          m0 (live-mount spec {})
+          m1 (live-patch spec {"highlight" "alan"} m0))
+      (assert= (get m1 :highlight) "alan")
+      (assert= (get m1 :items) (get m0 :items))))
+  (test "a live-patch clearing the param un-highlights"
+    (let (spec (reorder/live-spec)
+          m0 (live-mount spec {"highlight" "ada"})
+          m1 (live-patch spec {} m0))
+      (assert= (get m1 :highlight) nil)))
+  (test "the highlighted row gets the primary styling class"
+    (let (html (live-render (reorder/live-spec) (live-mount (reorder/live-spec) {"highlight" "grace"})))
+      (assert= (includes? html "bg-primary") true))))

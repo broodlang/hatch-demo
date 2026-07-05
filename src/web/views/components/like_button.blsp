@@ -1,0 +1,17 @@
+(defmodule web/views/components/like-button
+  "A tiny LiveComponent (web/component) demo: a toggle button with its own scoped state,
+  independent of whatever parent view embeds it. Embedded via
+  `(component web/views/components/like-button {\"id\" \"…\"})` in a parent's template."
+  (:alias web/component)
+  (:implements component/LiveComponentModule))
+
+(component/deflive-component
+  (mount (id assigns) {:liked? false})
+
+  (render (state)
+    [:button
+      {:data-event "toggle"
+       :class (if (get state :liked?) "btn btn-primary btn-sm" "btn btn-outline btn-sm")}
+      (if (get state :liked?) "♥ Liked" "♡ Like")])
+
+  (on "toggle" (params state) (assoc state :liked? (not (get state :liked?)))))

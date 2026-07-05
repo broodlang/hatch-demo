@@ -27,9 +27,13 @@
     (let (m (live-info (room/live-spec) {:from "xyz"} {:id "me" :events (list) :waves 0}))
       (assert= (get m :waves) 1)
       (assert= (includes? (first (get m :events)) "xyz") true)))
-  (test "a wave event returns the model unchanged (the update returns via broadcast)"
-    (let (model {:id "me" :events (list) :waves 0})
-      (assert= (live-event (room/live-spec) "wave" {} model) model)))
+  (test "a wave event records \"You waved\" in the sender's own log immediately"
+    ; the sender updates optimistically (no round trip for your own action) and
+    ; broadcast-froms everyone else, so only THIS session's model changes here
+    (let (model {:id "me" :events (list) :waves 0}
+          m (live-event (room/live-spec) "wave" {} model))
+      (assert= (get m :waves) 1)
+      (assert= (first (get m :events)) "You waved 👋")))
   (test "render shows the visitor id, wave count, and wave button"
     (let (html (live-render (room/live-spec) {:id "abc" :events (list) :waves 3}))
       (assert= (includes? html "abc") true)
