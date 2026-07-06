@@ -1,7 +1,7 @@
 (defmodule db
-  "App-specific schema and CRUD helpers for the messages table.
+  "App-specific schema and CRUD helpers for the messages and uploads tables.
   Call `(db/start opts)` once from main; handlers use `(db/all-messages)`
-  and `(db/insert-message row)`."
+  and `(db/insert-message row)`, or the upload-table equivalents below."
   (:alias repo)
   (:alias query)
   (:alias pg)
@@ -14,9 +14,23 @@
    :primary-key :id
    :fields {:id :serial :name :text :body :text}})
 
+(def uploads-schema
+  ; `:data` is `:bytea` (store's schema vocabulary emits an unrecognized type verbatim as
+  ; DDL — see store's schema.blsp). store-postgres's own param encoder has no `bytes?`
+  ; case yet (only string/int/float/bool/decimal), so a raw `bytes` value can't be bound
+  ; directly; web/views/uploads instead builds the `\x`-hex Postgres bytea *text literal*
+  ; itself and binds that as an ordinary string — Postgres casts it to bytea on the way
+  ; in per the column's declared type. Reads need no special handling at all: the existing
+  ; decode path (store-postgres's wire/types, keyed by the column's bytea OID) already
+  ; turns the returned value back into a real `bytes` value.
+  {:table :uploads
+   :primary-key :id
+   :fields {:id :serial :filename :text :content_type :text :size :integer :data :bytea}})
+
 (defn start (opts)
-  "Open the Postgres pool, migrate the messages table, and warm up the connections."
-  (def *repo* (web-repo/start (pg/adaptor) opts [messages-schema])))
+  "Open the Postgres pool, migrate the messages + uploads tables, and warm up the
+  connections."
+  (def *repo* (web-repo/start (pg/adaptor) opts [messages-schema uploads-schema])))
 
 (defn all-messages ()
   "All messages, oldest first (id ASC)."
@@ -29,3 +43,24 @@
 (defn insert-message (row)
   "Insert a `{:name … :body …}` map; return the inserted row (with auto-assigned `:id`)."
   (repo/insert *repo* :messages row))
+
+(defn all-uploads ()
+  "Every upload's metadata, newest first — `:data` excluded (query/select), so listing
+  uploads never pulls their file bytes back over the wire, just to show a list."
+  (repo/all *repo*
+    (-> (query/from :uploads)
+      (query/select [:id :filename :content_type :size])
+      (query/order-by :id :desc))))
+
+(defn get-upload (id)
+  "One upload's full row (including `:data`, decoded back to `bytes`), or nil."
+  (repo/one *repo* (-> (query/from :uploads) (query/where [:= :id id]))))
+
+(defn insert-upload (row)
+  "Insert a `{:filename :content_type :size :data} map (`:data` already a bytea text
+  literal — see uploads-schema); return the inserted row."
+  (repo/insert *repo* :uploads row))
+
+(defn delete-upload (id)
+  "Delete the upload with `id`; return the deleted row(s)."
+  (repo/delete *repo* :uploads [:= :id id]))

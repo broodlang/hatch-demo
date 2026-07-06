@@ -41,7 +41,14 @@
     (get "/messages" web/views/messages/index)
     (post "/messages" web/views/messages/create)
     ; Named path param demo: /messages/:id shows one message.
-    (get "/messages/:id" web/views/messages/show))
+    (get "/messages/:id" web/views/messages/show)
+    ; multipart/form-data upload + binary asset serving, Postgres-backed — see
+    ; web/endpoint's :spool-threshold for the in-memory/disk-spooled split this view
+    ; handles.
+    (get "/uploads" web/views/uploads/index)
+    (post "/uploads" web/views/uploads/create)
+    (get "/uploads/:id/file" web/views/uploads/show-file)
+    (post "/uploads/:id/delete" web/views/uploads/destroy))
   ; Live views (web/live), grouped into two live-sessions — the socket-side auth
   ; boundary. The same view module is mounted at distinct paths per session: navigating
   ; within a session swaps over the open socket (no reload); crossing into the other
