@@ -1,0 +1,142 @@
+(defmodule web/views/uploads
+  "A plain (non-live) page demonstrating hatch's newest HTTP-side pair — multipart file
+  uploads (`web/conn/files`/`file`, plus the spooled-to-disk path for large bodies:
+  `web/conn/spooled?`/`parse-upload-file`) and binary asset serving — stored in Postgres
+  rather than the filesystem (a `bytea` column; see `db/uploads-schema`'s docstring for
+  why the file bytes are hex-literal-encoded by hand rather than bound as a raw `bytes`
+  param). `GET /uploads` lists every upload with a delete button; `GET /uploads/:id/file`
+  serves one back byte-faithfully, straight out of the database; `POST /uploads/:id/delete`
+  removes it.
+
+  Whichever of the two upload paths actually runs depends on nothing this view controls:
+  `web/endpoint`'s `:spool-threshold` decides, per request, whether the body arrived in
+  memory (`file`) or was streamed straight to a temp file on disk (`spooled?` +
+  `parse-upload-file` — see that function's docstring for why a spooled *multipart*
+  request needs it instead of the zero-copy `save-body`: the spooled file is the whole
+  multipart envelope, not just the isolated file bytes).
+
+  The upload form submits via `fetch`, not a plain HTML POST, carrying the CSRF token as
+  an `X-CSRF-Token` header rather than the usual hidden field — not a style choice, a
+  requirement discovered by testing this view against a real spooled request: a spooled
+  body is streamed straight to disk unparsed, so `:body-params` (and with it, a hidden
+  `_csrf_token` field) is empty for a spooled multipart request. The header path is
+  read regardless (`web/csrf/submitted-token` checks it as a fallback), since HTTP
+  headers are always parsed before the server ever decides whether to spool the body."
+  (:use web/page)
+  (:use web/layout)
+  (:use web/conn)
+  ; raw — the upload-form-script's inline <script> body, unescaped
+  (:use web/template)
+  (:alias web/session)
+  (:alias web/csrf)
+  (:alias encoding)
+  (:alias db))
+
+(defn index (conn)
+  "GET /uploads — every upload (with a delete button) + an upload form."
+  (page conn
+    (layout "Uploads"
+      [:h1 {:class "text-2xl font-bold mb-2"} "File uploads · Postgres-backed"]
+      [:p {:class "mb-4 opacity-70"}
+        "multipart/form-data, parsed byte-faithfully whether the body stayed in memory "
+        "or (past a size threshold) streamed straight to disk — stored as a "
+        [:code {:class "badge badge-ghost"} "bytea"]
+        " column and served back byte-for-byte, straight out of Postgres."]
+      (flash-banner conn)
+      (upload-list conn (db/all-uploads))
+      [:form {:id "upload-form" :data-csrf (csrf/token conn) :class "card bg-base-200"}
+        [:div {:class "card-body space-y-3"}
+          [:input {:type "file" :id "upload-input" :name "upload"
+                   :class "file-input file-input-bordered w-full"}]
+          [:div {:class "card-actions"}
+            [:button {:type "button" :id "upload-btn" :class "btn btn-primary"} "Upload"]]]]
+      upload-form-script)))
+
+(defn upload-list (conn uploads)
+  "The list of uploaded files (metadata only — no bytes, see db/all-uploads), each with
+  a link to /uploads/:id/file and its own delete form."
+  (if (empty? uploads)
+    [:p {:class "opacity-60 mb-4"} "No uploads yet — be the first!"]
+    [:div {:class "space-y-2 mb-6"}
+      (map (fn (u) (upload-row conn u)) uploads)]))
+
+(defn upload-row (conn u)
+  [:div {:class "card bg-base-200"}
+    [:div {:class "card-body py-3 flex-row items-center justify-between"}
+      [:div {}
+        [:a {:href (str "/uploads/" (get u :id) "/file") :class "link font-semibold"}
+          (get u :filename)]
+        [:span {:class "text-sm opacity-60 ml-2"}
+          (str (get u :content_type) " · " (get u :size) " bytes")]]
+      [:form {:method "post" :action (str "/uploads/" (get u :id) "/delete")}
+        (csrf/csrf-input conn)
+        [:button {:class "btn btn-xs btn-error"} "Delete"]]]])
+
+(def upload-form-script
+  ; A plain form POST can't set a custom header, and the hidden-field CSRF token isn't
+  ; readable server-side for a spooled request (see this module's docstring) — so this
+  ; submits via fetch with the token as X-CSRF-Token, which works either way.
+  [:script {}
+    (raw "
+      document.getElementById('upload-btn').addEventListener('click', async () => {
+        const form = document.getElementById('upload-form');
+        const fileInput = document.getElementById('upload-input');
+        if (!fileInput.files[0]) return;
+        const fd = new FormData();
+        fd.append('upload', fileInput.files[0]);
+        const res = await fetch('/uploads', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': form.dataset.csrf },
+          body: fd,
+        });
+        if (res.redirected) location.href = res.url;
+      });
+    ")])
+
+(defn bytea-literal (bytes)
+  "A Postgres bytea text-format literal (`\\x` + hex) for a raw `bytes` value — see
+  db/uploads-schema's docstring for why this is built by hand rather than bound as a
+  `bytes` param directly."
+  (str "\\x" (encoding/hex-encode-bytes bytes)))
+
+(defn create (conn)
+  "POST /uploads — store the uploaded file's bytes in Postgres and flash a confirmation,
+  either way redirecting to GET /uploads (PRG). Handles both upload paths: an ordinary
+  in-memory `file`, or (once the body exceeds web/endpoint's :spool-threshold) the
+  spooled-to-disk path, which needs `parse-upload-file` to pull the file part back out of
+  the spooled multipart envelope (see this module's docstring)."
+  (let (f (if (spooled? conn)
+            (get-in (or (parse-upload-file conn) {}) [:files "upload"])
+            (file conn "upload")))
+    (if (nil? f)
+      (-> conn
+        (session/put-flash "error" "Pick a file first.")
+        (redirect-resp "/uploads"))
+      (let (data (get f :bytes))
+        (db/insert-upload
+          {:filename (or (get f :filename) "upload")
+           :content_type (or (get f :content-type) "application/octet-stream")
+           :size (count data)
+           :data (bytea-literal data)})
+        (-> conn
+          (session/put-flash "info" "Uploaded!")
+          (redirect-resp "/uploads"))))))
+
+(defn show-file (conn)
+  "GET /uploads/:id/file — the stored file's bytes, byte-faithfully, straight out of
+  Postgres (no filesystem involved at all)."
+  (let (id (string->number (or (param conn "id") "0"))
+        u (db/get-upload id))
+    (if (nil? u)
+      (not-found-resp conn)
+      (-> conn
+        (put-resp-header :content-type (get u :content_type))
+        (send-resp 200 (get u :data))))))
+
+(defn destroy (conn)
+  "POST /uploads/:id/delete — remove the row and redirect back to GET /uploads (PRG)."
+  (let (id (string->number (or (param conn "id") "0")))
+    (db/delete-upload id)
+    (-> conn
+      (session/put-flash "info" "Deleted.")
+      (redirect-resp "/uploads"))))

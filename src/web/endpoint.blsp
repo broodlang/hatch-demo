@@ -145,4 +145,9 @@
           (println (str "[assets] prod fingerprint skipped (" (error-message e)
                      "); serving plain asset URLs"))))))
   (req-log/start-req-log {:combine? (combine-logs?)})
-  (server/start (port) adapter (live/live-dispatcher) {:tls (tls-config)}))
+  ; :spool-threshold — a request body past this size streams straight to a temp file
+  ; (:spool-dir) instead of buffering in memory; web/views/uploads handles both paths.
+  ; 200KB is small enough that a real browser upload of more than a tiny icon exercises
+  ; the spooled path, while the demo's own test fixtures stay comfortably under it.
+  (server/start (port) adapter (live/live-dispatcher)
+    {:tls (tls-config) :spool-threshold 200000 :spool-dir "/tmp"}))
