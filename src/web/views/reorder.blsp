@@ -23,7 +23,7 @@
 
 (defn rotate (items)
   "Move the first item to the end — a reorder that shifts every row's position."
-  (if (empty? items) items (concat (rest items) (list (first items)))))
+  (if (empty? items) items (append (rest items) (list (first items)))))
 
 (deflive
   (mount (params) (init (get params "highlight" nil)))

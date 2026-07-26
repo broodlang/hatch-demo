@@ -89,11 +89,11 @@
       (receive
         ;; themed re-skins an error-status response (e.g. the router's 404) and passes a
         ;; normal response straight through
-        ([:task-done ~h resp] (do
+        ([:task-done ^h resp] (do
                                 (req-log/close rid (get resp :status) (elapsed))
                                 (errors/themed resp)))
-        ([:task-error ~h msg] (do (req-log/fail rid 500 (elapsed) msg) (errors/error-response 500)))
-        ([:task-timeout ~h] (do
+        ([:task-error ^h msg] (do (req-log/fail rid 500 (elapsed) msg) (errors/error-response 500)))
+        ([:task-timeout ^h] (do
                               (req-log/fail rid
                                 504
                                 (elapsed)
