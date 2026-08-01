@@ -6,6 +6,8 @@
   ; live-info / live-event / live-render — from the dep
   (:use web/test)
   (:alias web/views/room)
+  ; interleave — splices a live render's static and dynamic halves
+  (:alias web/parts)
   (:use test))
 
 (describe "room model"
@@ -44,9 +46,9 @@
   (test "minimal-diff parts reassemble to the full render"
     (let (spec (room/live-spec)
           m {:id "abc" :events (list "x waved 👋" "y waved 👋") :waves 2})
-      (assert= (web/parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
+      (assert= (parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
         (live-render spec m))
-      (assert= (web/parts/interleave (get spec :render-static)
+      (assert= (parts/interleave (get spec :render-static)
                  ((get spec :render-dynamic) {:id "z" :events (list) :waves 0}))
         (live-render spec {:id "z" :events (list) :waves 0}))))
   ; unmount unsubscribes from the topic (it runs on live-navigate, in the session process) —
