@@ -52,5 +52,6 @@
           m1 (live-patch spec {} m0))
       (assert= (get m1 :highlight) nil)))
   (test "the highlighted row gets the primary styling class"
-    (let (html (live-render (reorder/live-spec) (live-mount (reorder/live-spec) {"highlight" "grace"})))
+    (let (html (live-render (reorder/live-spec)
+                 (live-mount (reorder/live-spec) {"highlight" "grace"})))
       (assert= (includes? html "bg-primary") true))))

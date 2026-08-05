@@ -5,8 +5,7 @@
   (:alias web/component)
   (:implements component/LiveComponentModule))
 
-(component/deflive-component
-  (mount (id assigns) {:liked? false})
+(component/deflive-component (mount (id assigns) {:liked? false})
 
   (render (state)
     [:button

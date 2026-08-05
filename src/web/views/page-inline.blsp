@@ -11,9 +11,11 @@
   (page conn
     (layout "Inline page"
       [:h1 {:class "text-2xl font-bold mb-3"} "Plain page · inline Hiccup"]
-      [:p {:class "mb-4 opacity-70"}
+      [:p
+        {:class "mb-4 opacity-70"}
         "This page's markup is Hiccup s-expressions written directly in the handler — no template file."]
-      [:ul {:class "list-disc ml-6 space-y-1"}
+      [:ul
+        {:class "list-disc ml-6 space-y-1"}
         [:li {} "transport: " [:code {:class "badge badge-ghost"} "web/page"]]
         [:li {} "markup: inline " [:code {:class "badge badge-ghost"} "[:tag …]"] " Hiccup"]
         [:li {} "the original, unchanged way to write a page"]])))

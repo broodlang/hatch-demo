@@ -36,7 +36,8 @@
   ; own action) and broadcast-froms everyone *else* — the sender is excluded, so this
   ; wave is recorded exactly once locally, not twice (once here, once via the echo a
   ; plain broadcast would also have delivered back to the sender through handle-info).
-  (on "wave" (params model)
+  (on "wave"
+    (params model)
     (do
       (pubsub/broadcast-from topic {:from (get model :id)})
       (record model "You waved 👋")))
@@ -52,21 +53,28 @@
   (unmount (model) (pubsub/unsubscribe topic))
 
   (render (model)
-    [:div {:class "space-y-6"}
-      [:div {:class "prose"}
+    [:div
+      {:class "space-y-6"}
+      [:div
+        {:class "prose"}
         [:h1 {:class "text-2xl font-bold"} "Live room · PubSub"]
-        [:p {:class "opacity-70"}
+        [:p
+          {:class "opacity-70"}
           "You are visitor "
           [:span {:class "badge badge-primary"} (get model :id)]
           ". Open this page in another tab or browser and wave — every connected client "
           "updates in real time over the socket."]]
-      [:div {:class "card bg-base-200"}
-        [:div {:class "card-body items-center"}
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body items-center"}
           [:div {:class "text-5xl font-bold"} (str (get model :waves))]
           [:div {:class "stat-desc"} "waves seen in this room"]
           [:button {:data-event "wave" :class "btn btn-primary btn-lg mt-2"} "Wave 👋"]]]
-      [:div {:class "card bg-base-200"}
-        [:div {:class "card-body"}
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body"}
           [:h2 {:class "card-title text-base"} "Recent activity"]
           (activity-log model)]]]))
 
@@ -76,5 +84,6 @@
   (let (events (get model :events))
     (if (empty? events)
       [:p {:class "opacity-60"} "No waves yet — be the first."]
-      [:ul {:class "menu p-0"}
+      [:ul
+        {:class "menu p-0"}
         (map (fn (e) [:li {} [:span {:class "px-2 py-1"} e]]) events)])))

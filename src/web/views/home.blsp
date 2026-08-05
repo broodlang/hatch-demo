@@ -10,27 +10,38 @@
   (page conn
     (layout "hatch"
       [:h1 {:class "text-3xl font-bold mb-2"} "Hatch — markup, four ways"]
-      [:p {:class "mb-6 opacity-70"}
+      [:p
+        {:class "mb-6 opacity-70"}
         "The same render format (Hiccup) reached two ways — written inline, or "
         "compiled from an HTML-flavoured "
         [:code {:class "badge badge-ghost"} ".bml"]
         " template — across plain pages and live views."]
-      [:div {:class "grid gap-4 sm:grid-cols-2"}
-        [:div {:class "card bg-base-200"}
-          [:div {:class "card-body"}
-            [:h2 {:class "card-title"}
+      [:div
+        {:class "grid gap-4 sm:grid-cols-2"}
+        [:div
+          {:class "card bg-base-200"}
+          [:div
+            {:class "card-body"}
+            [:h2
+              {:class "card-title"}
               "Plain pages "
               [:span {:class "badge badge-ghost"} "web/page"]]
-            [:ul {:class "menu p-0"}
+            [:ul
+              {:class "menu p-0"}
               [:li {} [:a {:href "/page-inline"} "1a · inline Hiccup"]]
               [:li {} [:a {:href "/page-template"} "1b · template (page-template.bml)"]]]]]
-        [:div {:class "card bg-base-200"}
-          [:div {:class "card-body"}
-            [:h2 {:class "card-title"}
+        [:div
+          {:class "card bg-base-200"}
+          [:div
+            {:class "card-body"}
+            [:h2
+              {:class "card-title"}
               "Live views "
               [:span {:class "badge badge-ghost"} "web/live"]]
-            [:ul {:class "menu p-0"}
+            [:ul
+              {:class "menu p-0"}
               [:li {} [:a {:href "/counter-inline"} "2a · inline render"]]
               [:li {} [:a {:href "/counter"} "2b · template (counter.bml)"]]]]]]
-      [:p {:class "mt-6 text-sm opacity-60"}
+      [:p
+        {:class "mt-6 text-sm opacity-60"}
         "2a and 2b render identical UI — inline Hiccup vs the .bml that lowers to it."])))

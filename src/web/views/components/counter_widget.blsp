@@ -6,8 +6,7 @@
   (:alias web/component)
   (:implements component/LiveComponentModule))
 
-(component/deflive-component
-  (mount (id assigns) {:n (get assigns "start" 0)})
+(component/deflive-component (mount (id assigns) {:n (get assigns "start" 0)})
 
   (template "counter_widget.bml")
 

@@ -34,14 +34,16 @@
 
 ; How long a request waits before we warn, and its human label (derived, so the two never
 ; drift): 1000 -> "1s", 1500 -> "1.5s".
-(def req-log--timeout-ms 1000)
-(def req-log--deadline (str (/ req-log--timeout-ms 1000) "s"))
+(def- req-log-timeout-ms 1000)
+(def- req-log-deadline (str (/ req-log-timeout-ms 1000) "s"))
 
-(defn req-log--head (rid method path)
+(defn- req-log-head
+  (rid method path)
   "The human prefix every line for a request shares: `[rid] METHOD path`."
   (str "[" rid "] " method " " path))
 
-(defn req-log--base (rid method path)
+(defn- req-log-base
+  (rid method path)
   "The machine fields every record for a request carries."
   {:request_id rid :method method :path path})
 
@@ -49,15 +51,15 @@
 (defn start-record (rid method path)
   "The `in` record logged on arrival in non-combined mode: `[rid] METHOD path`."
   {:level :debug
-   :msg (req-log--head rid method path)
-   :meta (merge (req-log--base rid method path) {:event "request.start"})})
+   :msg (req-log-head rid method path)
+   :meta (merge (req-log-base rid method path) {:event "request.start"})})
 
 (defn done-record (rid method path status ms slow?)
   "The `out` record for a successful request: `[rid] METHOD path -> <status> in <ms>ms`.
   At :warn / `request.slow` when `slow?` (it overran the deadline), else :debug."
   {:level (if slow? :warn :debug)
-   :msg (str (req-log--head rid method path) " " status " " ms "ms")
-   :meta (merge (req-log--base rid method path)
+   :msg (str (req-log-head rid method path) " " status " " ms "ms")
+   :meta (merge (req-log-base rid method path)
            {:status_code status
             :duration_ms ms
             :event (if slow? "request.slow" "request.complete")})})
@@ -65,31 +67,33 @@
 (defn error-record (rid method path status ms err)
   "The `out` record for a failed request: `… -> <status> in <ms>ms (<err>)` at :error."
   {:level :error
-   :msg (str (req-log--head rid method path) " " status " " ms "ms (" err ")")
-   :meta (merge (req-log--base rid method path)
+   :msg (str (req-log-head rid method path) " " status " " ms "ms (" err ")")
+   :meta (merge (req-log-base rid method path)
            {:status_code status :duration_ms ms :error err :event "request.error"})})
 
 (defn pending-record (rid method path)
   "The `request.pending` :warn record the watchdog logs when a request is still in flight
   at the deadline."
   {:level :warn
-   :msg (str (req-log--head rid method path) " pending after " req-log--deadline)
-   :meta (merge (req-log--base rid method path)
-           {:event "request.pending" :after_ms req-log--timeout-ms})})
+   :msg (str (req-log-head rid method path) " pending after " req-log-deadline)
+   :meta (merge (req-log-base rid method path)
+           {:event "request.pending" :after_ms req-log-timeout-ms})})
 
-(defn req-log--emit (rec)
+(defn- req-log-emit
+  (rec)
   "Write a record through the real logger at its `:level`, carrying its `:meta`."
   (log/log (get rec :level) (get rec :msg) (get rec :meta))
   nil)
 
 ;; ---- the in-flight tracking process -----------------------------------------
-(defn req-log--watchdog (srv rid)
+(defn- req-log-watchdog
+  (srv rid)
   "Run in a fresh process by `open`: sleep the deadline, then tell `srv` that `rid` is
   overdue. `srv` ignores the tick if the request already finished."
-  (sleep req-log--timeout-ms)
+  (sleep req-log-timeout-ms)
   (send srv [:timeout rid]))
 
-(defprocess req-log--server
+(defprocess req-log-server
   (state)
   "Carries `{:combine? bool :pending {rid -> {:method :path :slow? bool}}}`. `open` stashes
   the request, arms a watchdog, and (in non-combined mode) logs the `in` record; `close` /
@@ -98,32 +102,32 @@
   (cast [:open rid method path]
     (do
       (when (not (get state :combine?))
-        (req-log--emit (start-record rid method path)))
-      (let (srv (self)) (spawn (req-log--watchdog srv rid)))
+        (req-log-emit (start-record rid method path)))
+      (let (srv (self)) (spawn (req-log-watchdog srv rid)))
       (update state :pending assoc rid {:method method :path path :slow? false})))
   (cast [:close rid status ms]
     (let (e (get (get state :pending) rid))
-      (req-log--emit (done-record rid
-                       (or (get e :method) "?")
-                       (or (get e :path) "?")
-                       status
-                       ms
-                       (get e :slow?)))
+      (req-log-emit (done-record rid
+                      (or (get e :method) "?")
+                      (or (get e :path) "?")
+                      status
+                      ms
+                      (get e :slow?)))
       (update state :pending dissoc rid)))
   (cast [:fail rid status ms err]
     (let (e (get (get state :pending) rid))
-      (req-log--emit (error-record rid
-                       (or (get e :method) "?")
-                       (or (get e :path) "?")
-                       status
-                       ms
-                       err))
+      (req-log-emit (error-record rid
+                      (or (get e :method) "?")
+                      (or (get e :path) "?")
+                      status
+                      ms
+                      err))
       (update state :pending dissoc rid)))
   (info [:timeout rid]
     (let (e (get (get state :pending) rid))
       (if e
         (do
-          (req-log--emit (pending-record rid (get e :method) (get e :path)))
+          (req-log-emit (pending-record rid (get e :method) (get e :path)))
           (update state :pending assoc rid (assoc e :slow? true)))
         ; Already finished in time — nothing to do.
         state))))
@@ -135,7 +139,7 @@
   line on `open` and an `out` line on completion. Replaces any previous `:req-log`."
   (let (o (if (empty? opts) {} (first opts))
         combine? (if (nil? (get o :combine?)) true (get o :combine?))
-        pid (spawn-server req-log--server {:combine? combine? :pending {}}))
+        pid (spawn-server req-log-server {:combine? combine? :pending {}}))
     (register :req-log pid)
     pid))
 
@@ -149,7 +153,7 @@
   (let (pid (req-logger))
     (if pid
       (! pid [:open rid method path])
-      (req-log--emit (start-record rid method path))))
+      (req-log-emit (start-record rid method path))))
   nil)
 
 (defn close (rid status ms)
@@ -158,7 +162,7 @@
   (let (pid (req-logger))
     (if pid
       (! pid [:close rid status ms])
-      (req-log--emit (done-record rid "?" "?" status ms false))))
+      (req-log-emit (done-record rid "?" "?" status ms false))))
   nil)
 
 (defn fail (rid status ms err)
@@ -166,5 +170,5 @@
   (let (pid (req-logger))
     (if pid
       (! pid [:fail rid status ms err])
-      (req-log--emit (error-record rid "?" "?" status ms err))))
+      (req-log-emit (error-record rid "?" "?" status ms err))))
   nil)

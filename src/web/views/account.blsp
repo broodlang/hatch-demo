@@ -21,20 +21,25 @@
   (page conn
     (layout "Account"
       [:h1 {:class "text-2xl font-bold mb-2"} "Account · session + flash"]
-      [:p {:class "mb-4 opacity-70"}
+      [:p
+        {:class "mb-4 opacity-70"}
         "Your name is kept in a signed session cookie. Saving it sets a one-shot flash and "
         "redirects — the message shows once, then is gone on the next load."]
       (flash-banner conn)
       (greeting conn)
-      [:form {:method "post" :action "/account" :class "card bg-base-200"}
-        [:div {:class "card-body space-y-3"}
+      [:form
+        {:method "post" :action "/account" :class "card bg-base-200"}
+        [:div
+          {:class "card-body space-y-3"}
           (csrf/csrf-input conn)
           [:label {:class "label"} [:span {:class "label-text"} "Display name"]]
-          [:input {:name "name"
-                   :value (session/get-session conn "name" "")
-                   :placeholder "Ada"
-                   :class "input input-bordered w-full"}]
-          [:div {:class "card-actions"}
+          [:input
+            {:name "name"
+             :value (session/get-session conn "name" "")
+             :placeholder "Ada"
+             :class "input input-bordered w-full"}]
+          [:div
+            {:class "card-actions"}
             [:button {:class "btn btn-primary"} "Save"]]]])))
 
 (defn greeting (conn)
@@ -60,5 +65,6 @@
                        (redirect-resp "/account")))
       ([:ok _] (-> conn
                  (session/put-session "name" name)
-                 (session/put-flash "info" (if (= name "") "Cleared your name." (str "Saved! Hi, " name ".")))
+                 (session/put-flash "info"
+                   (if (= name "") "Cleared your name." (str "Saved! Hi, " name ".")))
                  (redirect-resp "/account"))))))

@@ -9,8 +9,8 @@
   (:use web/layout)
   (:alias web/bml))
 (defn points ()
-  ["transport: web/page" "markup: page-template.bml (deftemplate)"
-    "uses {…} interpolation and :for"])
+  ["transport: web/page"
+    "markup: page-template.bml (deftemplate)" "uses {…} interpolation and :for"])
 
 ; Compile page-template.bml into `body`, a function of (title points).
 (bml/deftemplate body (title points) "page-template.bml")

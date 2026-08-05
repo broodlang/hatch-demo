@@ -20,20 +20,23 @@
 
 ; ---- live view ----
 
-(deflive
-  (mount (params)
-    (init (string->number (get params "start" "0"))))
+(deflive (mount (params)
+           (init (string->number (get params "start" "0"))))
 
   ; markup lives in counter.bml, compiled to Hiccup at load
   (template "counter.bml")
-  (on "increment" (params model)
+  (on "increment"
+    (params model)
     (increment model))
 
-  (on "decrement" (params model)
+  (on "decrement"
+    (params model)
     (decrement model))
 
-  (tick 1000 (model)
+  (tick 1000
+    (model)
     (bump model :fast))
 
-  (tick 3000 (model)
+  (tick 3000
+    (model)
     (bump model :slow)))

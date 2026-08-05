@@ -20,7 +20,7 @@
       (is (> (index-of html "Hello from Ada!") -1))))
   (test "renders multiple messages"
     (let (html (render (message-list (list {:id 1 :name "Ada" :body "First"}
-                                          {:id 2 :name "Grace" :body "Second"}))))
+                                       {:id 2 :name "Grace" :body "Second"}))))
       (is (> (index-of html "Ada") -1))
       (is (> (index-of html "Grace") -1))
       (is (> (index-of html "First") -1))

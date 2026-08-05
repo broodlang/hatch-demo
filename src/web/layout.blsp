@@ -33,20 +33,25 @@
 
 (defn nav-dropdown (label & items)
   "A daisyUI dropdown grouping related nav links under `label`."
-  [:div {:class "dropdown dropdown-end"}
+  [:div
+    {:class "dropdown dropdown-end"}
     [:div {:tabindex "0" :role "button" :class "btn btn-ghost btn-sm"} label]
-    [:ul {:tabindex "0"
-          :class "menu dropdown-content bg-base-200 rounded-box z-[1] w-56 p-2 shadow"}
+    [:ul
+      {:tabindex "0"
+       :class "menu dropdown-content bg-base-200 rounded-box z-[1] w-56 p-2 shadow"}
       items]])
 
 (defn nav-bar ()
   "The top menu bar — a daisyUI navbar. The live views are grouped by their live-session
   (`customer` / `admin`): clicking between two views in the same session swaps over the
   socket (no reload); crossing sessions forces a full reload (the auth boundary)."
-  [:div {:class "navbar bg-base-300 shadow-sm sticky top-0 z-50"}
-    [:div {:class "navbar-start"}
+  [:div
+    {:class "navbar bg-base-300 shadow-sm sticky top-0 z-50"}
+    [:div
+      {:class "navbar-start"}
       [:a {:href "/" :data-nav true :class "btn btn-ghost text-xl"} "Hatch"]]
-    [:div {:class "navbar-end gap-1"}
+    [:div
+      {:class "navbar-end gap-1"}
       (nav-dropdown "Customer"
         [:li {} (nav-link "/counter" "Counter")]
         [:li {} (nav-link "/counter-inline" "Counter (inline)")]
@@ -76,12 +81,15 @@
   "The shared page shell: daisyUI navbar on top, page content in a centered <main>. The
   navbar is the pre-rendered `*nav-html*` (it never varies); only `title` and `children`
   are rendered per request."
-  [:html {:data-theme "light"}
-    [:head {}
+  [:html
+    {:data-theme "light"}
+    [:head
+      {}
       [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
       [:title {} title]
       (stylesheet (static/asset-path "app.css"))]
-    [:body {:class "min-h-screen bg-base-100 text-base-content"}
+    [:body
+      {:class "min-h-screen bg-base-100 text-base-content"}
       (raw *nav-html*)
       [:main {:class "max-w-3xl mx-auto p-6"} children]]])

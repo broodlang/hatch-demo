@@ -28,8 +28,8 @@
   ; two rules on :name — required? first, so a blank name shows "required" rather than
   ; "too short" (validate keeps only the first failing rule per field)
   [[:name form/required? "Name is required."]
-   [:name (form/min-length? 2) "Name must be at least 2 characters."]
-   [:email form/email? "Hmm, that doesn't look like an email."]])
+    [:name (form/min-length? 2) "Name must be at least 2 characters."]
+    [:email form/email? "Hmm, that doesn't look like an email."]])
 
 (defn errors (model)
   "The `{field message}` map for `model` — `{}` when every rule passes."
@@ -43,14 +43,16 @@
 
 ; ---- live view ----
 
-(deflive
-  (mount (params) (init))
+(deflive (mount (params) (init))
 
   (render (model)
-    [:div {:class "space-y-6"}
-      [:div {:class "prose"}
+    [:div
+      {:class "space-y-6"}
+      [:div
+        {:class "prose"}
         [:h1 {:class "text-2xl font-bold"} "Live form · type to validate"]
-        [:p {:class "opacity-70"}
+        [:p
+          {:class "opacity-70"}
           "Every keystroke pushes a "
           [:code {:class "badge badge-ghost"} "validate"]
           " event over the socket; the server re-renders and the feedback below updates in place."]]
@@ -58,10 +60,12 @@
         (signup-success model)
         (signup-form model))])
 
-  (on "validate" (params model)
+  (on "validate"
+    (params model)
     (set-field model (get params "field" "") (get params "value" "")))
 
-  (on "submit" (params model)
+  (on "submit"
+    (params model)
     (if (form-valid? model)
       (assoc model :submitted? true)
       (assoc model :attempted? true)))
@@ -74,25 +78,33 @@
   ; A plain <div>, not a <form>: the live client drives everything over the socket
   ; (validate on each keystroke, submit on the button's data-event), so there's no native
   ; form submission to suppress — and no stray submit when a label or padding is clicked.
-  [:div {:class "card bg-base-200"}
-    [:div {:class "card-body space-y-4"}
-      [:div {:class "form-control"}
+  [:div
+    {:class "card bg-base-200"}
+    [:div
+      {:class "card-body space-y-4"}
+      [:div
+        {:class "form-control"}
         [:label {:class "label"} [:span {:class "label-text"} "Name"]]
-        [:input {:data-event "validate"
-                 :data-params "{\"field\":\"name\"}"
-                 :placeholder "Ada Lovelace"
-                 :class "input input-bordered w-full"}]
+        [:input
+          {:data-event "validate"
+           :data-params "{\"field\":\"name\"}"
+           :placeholder "Ada Lovelace"
+           :class "input input-bordered w-full"}]
         (name-feedback model)]
-      [:div {:class "form-control"}
+      [:div
+        {:class "form-control"}
         [:label {:class "label"} [:span {:class "label-text"} "Email"]]
-        [:input {:data-event "validate"
-                 :data-params "{\"field\":\"email\"}"
-                 :placeholder "ada@example.com"
-                 :class "input input-bordered w-full"}]
+        [:input
+          {:data-event "validate"
+           :data-params "{\"field\":\"email\"}"
+           :placeholder "ada@example.com"
+           :class "input input-bordered w-full"}]
         (email-feedback model)]
-      [:div {:class "flex items-center gap-3 pt-2"}
+      [:div
+        {:class "flex items-center gap-3 pt-2"}
         [:button {:data-event "submit" :class "btn btn-primary"} "Sign up"]
-        [:span {:class (str "text-sm " (if (form-valid? model) "text-success" "opacity-60"))}
+        [:span
+          {:class (str "text-sm " (if (form-valid? model) "text-success" "opacity-60"))}
           (if (form-valid? model) "Ready to submit." "Fill in both fields to continue.")]]]])
 
 (defn feedback-line (cls text)
@@ -101,23 +113,28 @@
 
 (defn name-feedback (model)
   (cond
-    (name-ok? model) (feedback-line "text-success"
-                       (str "Looks good — " (string-length (get model :name)) " characters."))
+    (name-ok? model)
+      (feedback-line "text-success"
+        (str "Looks good — " (string-length (get model :name)) " characters."))
     (get model :attempted?) (feedback-line "text-error" (form/error-for (errors model) :name))
     else (feedback-line "opacity-60" "Tell us your name.")))
 
 (defn email-feedback (model)
   (cond
     (email-ok? model) (feedback-line "text-success" "That's a valid-looking email ✓")
-    (blank? (get model :email)) (if (get model :attempted?)
-                                  (feedback-line "text-error" (form/error-for (errors model) :email))
-                                  (feedback-line "opacity-60" "We'll only use this to reply."))
+    (blank? (get model :email))
+      (if (get model :attempted?)
+        (feedback-line "text-error" (form/error-for (errors model) :email))
+        (feedback-line "opacity-60" "We'll only use this to reply."))
     else (feedback-line "text-error" (form/error-for (errors model) :email))))
 
 (defn signup-success (model)
-  [:div {:class "card bg-success text-success-content"}
-    [:div {:class "card-body"}
+  [:div
+    {:class "card bg-success text-success-content"}
+    [:div
+      {:class "card-body"}
       [:h2 {:class "card-title"} (str "Thanks, " (get model :name) "!")]
       [:p {} (str "We'll be in touch at " (get model :email) ".")]
-      [:div {:class "card-actions"}
+      [:div
+        {:class "card-actions"}
         [:button {:data-event "reset" :class "btn btn-sm"} "Start over"]]]])
