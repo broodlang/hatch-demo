@@ -23,7 +23,8 @@
     (page conn
       (layout "Messages"
         [:h1 {:class "text-2xl font-bold mb-4"} "Message board · Postgres-backed"]
-        [:p {:class "mb-4 opacity-70"}
+        [:p
+          {:class "mb-4 opacity-70"}
           "Messages are persisted to PostgreSQL via "
           [:code {:class "badge badge-ghost"} "store-postgres"]
           ". POST → INSERT → redirect — the standard PRG pattern."]
@@ -36,14 +37,18 @@
   `/messages/:id` — the named-path-param demo."
   (if (empty? msgs)
     [:p {:class "opacity-60 mb-6"} "No messages yet — be the first!"]
-    [:div {:class "space-y-3 mb-6"}
+    [:div
+      {:class "space-y-3 mb-6"}
       (map (fn (m)
-             [:div {:class "card bg-base-200"}
-               [:div {:class "card-body py-3"}
-                 [:a {:href (str "/messages/" (get m :id)) :data-nav true :class "font-semibold link"}
+             [:div
+               {:class "card bg-base-200"}
+               [:div
+                 {:class "card-body py-3"}
+                 [:a
+                   {:href (str "/messages/" (get m :id)) :data-nav true :class "font-semibold link"}
                    (get m :name)]
                  [:p {} (get m :body)]]])
-           msgs)]))
+        msgs)]))
 
 (defn show (conn)
   "GET /messages/:id — a single message, or a not-found note. The `:id` path segment
@@ -55,8 +60,10 @@
       (layout "Message"
         (if (nil? msg)
           [:p {} (str "No message with id " id ".")]
-          [:div {:class "card bg-base-200"}
-            [:div {:class "card-body"}
+          [:div
+            {:class "card bg-base-200"}
+            [:div
+              {:class "card-body"}
               [:p {:class "font-semibold"} (get msg :name)]
               [:p {} (get msg :body)]]])
         [:p {:class "mt-4"} [:a {:href "/messages" :data-nav true :class "link"} "← All messages"]]))))
@@ -66,16 +73,23 @@
   both ways web/csrf accepts a token: a normal submit sends the hidden `_csrf_token` field;
   \"Post via fetch\" instead sends it as the `X-CSRF-Token` header (protect-from-forgery's
   fetch/JSON-client path — `web/csrf/submitted-token` accepts either)."
-  [:form {:id "message-form" :method "post" :action "/messages" :class "card bg-base-200"}
-    [:div {:class "card-body space-y-3"}
+  [:form
+    {:id "message-form" :method "post" :action "/messages" :class "card bg-base-200"}
+    [:div
+      {:class "card-body space-y-3"}
       [:h2 {:class "card-title"} "Post a message"]
       (web/csrf/csrf-input conn)
       [:label {:class "label"} [:span {:class "label-text"} "Name"]]
       [:input {:name "name" :placeholder "Your name" :class "input input-bordered w-full"}]
       [:label {:class "label"} [:span {:class "label-text"} "Message"]]
-      [:textarea {:name "body" :rows "3" :placeholder "Say something…"
-                  :class "textarea textarea-bordered w-full"} ""]
-      [:div {:class "card-actions"}
+      [:textarea
+        {:name "body"
+         :rows "3"
+         :placeholder "Say something…"
+         :class "textarea textarea-bordered w-full"}
+        ""]
+      [:div
+        {:class "card-actions"}
         [:button {:type "submit" :class "btn btn-primary"} "Post"]
         [:button {:type "button" :id "fetch-post-btn" :class "btn btn-outline"} "Post via fetch"]]]
     fetch-post-script])
@@ -84,8 +98,10 @@
   ; Sends the same fields, but as a fetch() with the CSRF token in the X-CSRF-Token
   ; header instead of the hidden _csrf_token field — the path a JSON/SPA client would
   ; use, since it has no HTML form to embed a hidden field in.
-  [:script {}
-    (raw "
+  [:script
+    {}
+    (raw
+      "
       document.getElementById('fetch-post-btn').addEventListener('click', async () => {
         const form = document.getElementById('message-form');
         const token = form.querySelector('input[name=_csrf_token]').value;
@@ -107,10 +123,12 @@
 
 (def *message-rules*
   [["name" form/required? "Name is required."]
-   ; letters/digits/spaces only — required? first, so a blank name still reads "required"
-   ; rather than "letters and spaces only" (validate keeps the first failing rule/field)
-   ["name" (form/matches-pattern? "(\\w|\\s)+") "Name may only contain letters, digits, and spaces."]
-   ["body" form/required? "Message is required."]])
+    ; letters/digits/spaces only — required? first, so a blank name still reads "required"
+    ; rather than "letters and spaces only" (validate keeps the first failing rule/field)
+    ["name"
+      (form/matches-pattern? "(\\w|\\s)+")
+      "Name may only contain letters, digits, and spaces."]
+    ["body" form/required? "Message is required."]])
 
 (defn error-summary (errs)
   "Every error message in `errs`, space-joined — there are only ever one or two fields

@@ -25,8 +25,7 @@
   "Move the first item to the end — a reorder that shifts every row's position."
   (if (empty? items) items (append (rest items) (list (first items)))))
 
-(deflive
-  (mount (params) (init (get params "highlight" nil)))
+(deflive (mount (params) (init (get params "highlight" nil)))
 
   ; A server-driven reorder every 3s — no click, so it fires while you're typing in a box,
   ; which is exactly when focus preservation matters.
@@ -40,10 +39,13 @@
   (handle-params (params model) (assoc model :highlight (get params "highlight" nil)))
 
   (render (model)
-    [:div {:class "space-y-6"}
-      [:div {:class "prose"}
+    [:div
+      {:class "space-y-6"}
+      [:div
+        {:class "prose"}
         [:h1 {:class "text-2xl font-bold"} "Keyed morph · focus survives reorder"]
-        [:p {:class "opacity-70"}
+        [:p
+          {:class "opacity-70"}
           "This list reorders every 3 seconds. Click into a box and start typing — with "
           "keyed DOM morphing your cursor and text stay put as the row moves. Each row is "
           "keyed by a stable "
@@ -52,18 +54,22 @@
           [:code {:class "badge badge-ghost"} "?highlight=…"]
           " into the URL — no remount, so the rotation above never skips a beat."]]
       [:button {:data-event "rotate" :class "btn btn-sm"} "Rotate now"]
-      [:div {:class "space-y-2"}
+      [:div
+        {:class "space-y-2"}
         (map (fn (it)
-               [:div {:data-key (get it :id)
-                      :class (str "flex items-center gap-3 card p-3 "
-                               (if (= (get it :id) (get model :highlight))
-                                 "bg-primary text-primary-content"
-                                 "bg-base-200"))}
+               [:div
+                 {:data-key (get it :id)
+                  :class (str "flex items-center gap-3 card p-3 "
+                           (if (= (get it :id) (get model :highlight))
+                             "bg-primary text-primary-content"
+                             "bg-base-200"))}
                  [:span {:class "badge badge-primary w-20"} (get it :name)]
-                 [:input {:placeholder "type here — keep focus through a reorder…"
-                          :class "input input-bordered input-sm flex-1"}]
-                 [:a {:href (str "/reorder?highlight=" (get it :id))
-                      :data-patch true
-                      :class "btn btn-xs"}
+                 [:input
+                   {:placeholder "type here — keep focus through a reorder…"
+                    :class "input input-bordered input-sm flex-1"}]
+                 [:a
+                   {:href (str "/reorder?highlight=" (get it :id))
+                    :data-patch true
+                    :class "btn btn-xs"}
                    "Highlight"]])
           (get model :items))]]))

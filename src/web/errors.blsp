@@ -24,7 +24,8 @@
     (403 ["Forbidden" "You don’t have access to this page."])
     (404 ["Page not found" "That page doesn’t exist or may have moved."])
     (500 ["Something went wrong" "An unexpected error occurred while handling your request."])
-    (503 ["Service unavailable" "The service is temporarily unavailable — please try again shortly."])
+    (503 ["Service unavailable"
+           "The service is temporarily unavailable — please try again shortly."])
     (504 ["Request timed out" "The request took too long and was stopped."])
     ;; Fallback: any other 4xx/5xx gets a generic page; 2xx/3xx aren't errors (nil), so
     ;; those responses pass through untouched.
@@ -33,7 +34,8 @@
 (defn error-node (code title blurb)
   "The Hiccup for an error page, through the shared layout."
   (layout (str code " — " title)
-    [:div {:class "text-center py-16"}
+    [:div
+      {:class "text-center py-16"}
       [:h1 {:class "text-7xl font-bold text-primary"} (str code)]
       [:p {:class "text-2xl mt-4 mb-2"} title]
       [:p {:class "opacity-70 mb-8"} blurb]
@@ -44,14 +46,14 @@
   (let (m (error-meta code))
     (when m (html (error-node code (first m) (second m))))))
 
-(def error--html-headers {:content-type "text/html; charset=utf-8"})
+(def- error-html-headers {:content-type "text/html; charset=utf-8"})
 
 (defn error-response (code)
   "A standalone error response map for `code` (no upstream response to re-skin), or nil if
   `code` isn't themed. For errors the endpoint raises itself (500 crash, 504 timeout)."
   (let (body (error-body code))
     (when body
-      {:status code :headers error--html-headers :body body})))
+      {:status code :headers error-html-headers :body body})))
 
 (defn themed (resp)
   "Re-skin an upstream response `resp`'s body with the app's error page when its status is
@@ -62,5 +64,5 @@
     (if body
       (assoc resp
         :body body
-        :headers (merge (get resp :headers {}) error--html-headers))
+        :headers (merge (get resp :headers {}) error-html-headers))
       resp)))

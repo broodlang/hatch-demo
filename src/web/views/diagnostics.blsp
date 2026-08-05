@@ -29,7 +29,8 @@
   (page conn
     (layout "slow"
       [:h1 {:class "text-3xl font-bold mb-2"} "Slow page"]
-      [:p {:class "opacity-70"}
+      [:p
+        {:class "opacity-70"}
         "This handler slept 2 seconds before responding. Check the server log: req-log "
         "logs a "
         [:code {:class "badge badge-ghost"} "still running after 1s"]

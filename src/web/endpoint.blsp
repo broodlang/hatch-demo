@@ -53,9 +53,10 @@
   (let (path (get conn :path))
     (cond
       (= path "/static/brood_live.js") (serve-client-js conn)
-      (starts-with? path "/static/") (static/serve conn
-                                       "static"
-                                       (substring path 8 (string-length path)))
+      (starts-with? path "/static/")
+        (static/serve conn
+          "static"
+          (substring path 8 (string-length path)))
       else nil)))
 
 ; A handler still running after this is hard-killed (504) — a backstop for a wedged
@@ -123,8 +124,9 @@
         key-file (getenv "TLS_KEY_FILE"))
     (cond
       (and cert-file key-file) {:cert (slurp cert-file) :key (slurp key-file)}
-      (and (dev?) (getenv "HATCH_TLS")) (let ([cert key] (tls-self-signed "localhost"))
-                                          {:cert cert :key key})
+      (and (dev?) (getenv "HATCH_TLS"))
+        (let ([cert key] (tls-self-signed "localhost"))
+          {:cert cert :key key})
       else nil)))
 
 (defn serve ()
@@ -142,12 +144,15 @@
       (try
         (assets/fingerprint (get *assets* :fingerprint))
         (catch e
-          (println (str "[assets] prod fingerprint skipped (" (error-message e)
+          (println (str "[assets] prod fingerprint skipped ("
+                     (error-message e)
                      "); serving plain asset URLs"))))))
   (req-log/start-req-log {:combine? (combine-logs?)})
   ; :spool-threshold — a request body past this size streams straight to a temp file
   ; (:spool-dir) instead of buffering in memory; web/views/uploads handles both paths.
   ; 200KB is small enough that a real browser upload of more than a tiny icon exercises
   ; the spooled path, while the demo's own test fixtures stay comfortably under it.
-  (server/start (port) adapter (live/live-dispatcher)
+  (server/start (port)
+    adapter
+    (live/live-dispatcher)
     {:tls (tls-config) :spool-threshold 200000 :spool-dir "/tmp"}))

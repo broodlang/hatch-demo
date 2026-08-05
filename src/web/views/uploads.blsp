@@ -37,18 +37,25 @@
   (page conn
     (layout "Uploads"
       [:h1 {:class "text-2xl font-bold mb-2"} "File uploads · Postgres-backed"]
-      [:p {:class "mb-4 opacity-70"}
+      [:p
+        {:class "mb-4 opacity-70"}
         "multipart/form-data, parsed byte-faithfully whether the body stayed in memory "
         "or (past a size threshold) streamed straight to disk — stored as a "
         [:code {:class "badge badge-ghost"} "bytea"]
         " column and served back byte-for-byte, straight out of Postgres."]
       (flash-banner conn)
       (upload-list conn (db/all-uploads))
-      [:form {:id "upload-form" :data-csrf (csrf/token conn) :class "card bg-base-200"}
-        [:div {:class "card-body space-y-3"}
-          [:input {:type "file" :id "upload-input" :name "upload"
-                   :class "file-input file-input-bordered w-full"}]
-          [:div {:class "card-actions"}
+      [:form
+        {:id "upload-form" :data-csrf (csrf/token conn) :class "card bg-base-200"}
+        [:div
+          {:class "card-body space-y-3"}
+          [:input
+            {:type "file"
+             :id "upload-input"
+             :name "upload"
+             :class "file-input file-input-bordered w-full"}]
+          [:div
+            {:class "card-actions"}
             [:button {:type "button" :id "upload-btn" :class "btn btn-primary"} "Upload"]]]]
       upload-form-script)))
 
@@ -57,18 +64,25 @@
   a link to /uploads/:id/file and its own delete form."
   (if (empty? uploads)
     [:p {:class "opacity-60 mb-4"} "No uploads yet — be the first!"]
-    [:div {:class "space-y-2 mb-6"}
+    [:div
+      {:class "space-y-2 mb-6"}
       (map (fn (u) (upload-row conn u)) uploads)]))
 
 (defn upload-row (conn u)
-  [:div {:class "card bg-base-200"}
-    [:div {:class "card-body py-3 flex-row items-center justify-between"}
-      [:div {}
-        [:a {:href (str "/uploads/" (get u :id) "/file") :class "link font-semibold"}
+  [:div
+    {:class "card bg-base-200"}
+    [:div
+      {:class "card-body py-3 flex-row items-center justify-between"}
+      [:div
+        {}
+        [:a
+          {:href (str "/uploads/" (get u :id) "/file") :class "link font-semibold"}
           (get u :filename)]
-        [:span {:class "text-sm opacity-60 ml-2"}
+        [:span
+          {:class "text-sm opacity-60 ml-2"}
           (str (get u :content_type) " · " (get u :size) " bytes")]]
-      [:form {:method "post" :action (str "/uploads/" (get u :id) "/delete")}
+      [:form
+        {:method "post" :action (str "/uploads/" (get u :id) "/delete")}
         (csrf/csrf-input conn)
         [:button {:class "btn btn-xs btn-error"} "Delete"]]]])
 
@@ -76,8 +90,10 @@
   ; A plain form POST can't set a custom header, and the hidden-field CSRF token isn't
   ; readable server-side for a spooled request (see this module's docstring) — so this
   ; submits via fetch with the token as X-CSRF-Token, which works either way.
-  [:script {}
-    (raw "
+  [:script
+    {}
+    (raw
+      "
       document.getElementById('upload-btn').addEventListener('click', async () => {
         const form = document.getElementById('upload-form');
         const fileInput = document.getElementById('upload-input');
@@ -113,11 +129,10 @@
         (session/put-flash "error" "Pick a file first.")
         (redirect-resp "/uploads"))
       (let (data (get f :bytes))
-        (db/insert-upload
-          {:filename (or (get f :filename) "upload")
-           :content_type (or (get f :content-type) "application/octet-stream")
-           :size (count data)
-           :data (bytea-literal data)})
+        (db/insert-upload {:filename (or (get f :filename) "upload")
+                           :content_type (or (get f :content-type) "application/octet-stream")
+                           :size (count data)
+                           :data (bytea-literal data)})
         (-> conn
           (session/put-flash "info" "Uploaded!")
           (redirect-resp "/uploads"))))))

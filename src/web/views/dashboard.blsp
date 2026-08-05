@@ -26,49 +26,60 @@
 (def session-secret
   (or (getenv "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
 
-(deflive
-  (on-mount-guard (conn)
-    (let (conn ((session/fetch-session session-secret) conn))
-      (if (blank? (session/get-session conn "name" ""))
-        "/account"
-        nil)))
+(deflive (on-mount-guard (conn)
+           (let (conn ((session/fetch-session session-secret) conn))
+             (if (blank? (session/get-session conn "name" ""))
+               "/account"
+               nil)))
 
   (mount (params) {:count 0})
 
   (render (model)
-    [:div {:class "space-y-4"}
+    [:div
+      {:class "space-y-4"}
       [:h1 {:class "text-2xl font-bold mb-2"} "Dashboard"]
-      [:p {:class "opacity-70"}
+      [:p
+        {:class "opacity-70"}
         "You only reached this page because on-mount-guard let you in — it checked "
         "your session for a saved name (set on "
         [:a {:href "/account" :class "link"} "/account"]
         ") and would have redirected you there otherwise, on connect or on "
         "live-navigate."]
-      [:div {:class "card bg-base-200"}
-        [:div {:class "card-body"}
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body"}
           [:p {:class "mb-2"} (str "Clicks: " (get model :count))]
           [:button {:data-event "bump" :class "btn btn-primary"} "Click me"]]]
-      [:div {:class "card bg-base-200"}
-        [:div {:class "card-body"}
-          [:p {:class "mb-2 text-sm opacity-70"}
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body"}
+          [:p
+            {:class "mb-2 text-sm opacity-70"}
             "Two independent LiveComponents (web/component), each with its own scoped "
             "state — click either directly, or click \"Click me\" above three times to "
             "see the parent push a like into just the first one via send-update, from "
             "outside either component's own handler. The second never reacts to that "
             "push, and clicking one never toggles the other — different ids, separate "
             "state."]
-          [:div {:class "flex gap-2"}
+          [:div
+            {:class "flex gap-2"}
             (component web/views/components/like-button {"id" "dash-like"})
             (component web/views/components/like-button {"id" "dash-like-2"})]]]
-      [:div {:class "card bg-base-200"}
-        [:div {:class "card-body"}
-          [:p {:class "mb-2 text-sm opacity-70"}
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body"}
+          [:p
+            {:class "mb-2 text-sm opacity-70"}
             "A third LiveComponent, rendered from a sibling "
             [:code {:class "badge badge-ghost"} "counter_widget.bml"]
             " template rather than inline Hiccup."]
           (component web/views/components/counter-widget {"id" "dash-counter" "start" 0})]]])
 
-  (on "bump" (params model)
+  (on "bump"
+    (params model)
     (let (n (inc (get model :count)))
       ; demonstrate send-update: an out-of-band push into a component's state, from a
       ; handler that isn't the component's own — (self) is the session pid here, since
