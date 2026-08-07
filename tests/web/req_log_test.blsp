@@ -3,7 +3,7 @@
 ;; text/JSON lines used to be tested here too, against a demo-local main/text-line and
 ;; main/json-line — but those were deleted when main.blsp was refactored onto
 ;; web/application/start (the formatting logic moved into the framework as
-;; web/application's private application--text-line/application--json-line, now covered
+;; web/application's private application-text-line/application-json-line, now covered
 ;; by hatch's own web_application_test.blsp). This file only owns the record shape,
 ;; which is still demo-side code.
 (defmodule web-req-log-test

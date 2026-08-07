@@ -34,6 +34,10 @@
    ; After the release build, content-fingerprint app.css → app.<sha>.css + a cache-manifest
    ; (web/assets/fingerprint). The layout links it via static/asset-path, so prod serves the
    ; fingerprinted, immutable, cache-forever URL; dev skips this and serves the plain path.
+   ; Since hatch 0.2.0 this step also writes an `app.<sha>.css.gz` sibling (best-effort, via
+   ; the `gzip` CLI), and web/static negotiates it on `Accept-Encoding: gzip` — ~5-6x smaller
+   ; over the wire, with `Vary: Accept-Encoding` so shared caches key the two apart. Nothing
+   ; to configure: it follows from :fingerprint.
    :fingerprint {:dir "static" :files ["app.css"]}
    ; First-run setup, so `nest run` in dev needs no manual `bin/setup`: assets/ensure
    ; runs :install when :install-probe (the bundler binary) is missing, then a one-shot
