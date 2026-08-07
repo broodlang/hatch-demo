@@ -8,9 +8,21 @@
 /static/app.css
 
 # Content-fingerprinted assets + manifest — produced by the release build
-# (web/assets/fingerprint); regenerable, not committed.
+# (web/assets/fingerprint); regenerable, not committed. Since hatch 0.2.0 the
+# fingerprint step also precompresses each text asset to a `.gz` sibling, which
+# web/static serves to `Accept-Encoding: gzip` clients.
 /static/app.*.css
+/static/app.*.css.gz
 /static/cache-manifest
 
 # Crash dump appended by the panic hook — local debug artifact, not committed.
 /.brood_crash_dump
+
+# Editor scratch — Emacs autosaves (#file#), backups (file~), lock files (.#file).
+# One of these (tests/web/#errors_test.blsp#) was committed by an over-broad `git add`.
+\#*\#
+*~
+.\#*
+
+# Check/startup-image cache (`nest check`, ADR-218) — regenerable.
+/.brood/

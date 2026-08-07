@@ -6,7 +6,7 @@
 ;  - combine? (default true): one folded line per request (`[rid] GET / -> 200 in 4.2ms`,
 ;    held until done). When false, an `in` line is logged on arrival and an `out` line on
 ;    completion — two correlated lines (request_id ties them).
-;  - the watchdog: a request that overruns `req-log--timeout-ms` is surfaced at :warn —
+;  - the watchdog: a request that overruns `req-log-timeout-ms` is surfaced at :warn —
 ;    a `request.pending` line while in flight, and its completion bumped to :warn — so
 ;    slow requests don't hide at :debug.
 (defmodule web/req-log
