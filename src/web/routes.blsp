@@ -12,7 +12,9 @@
   ; fetch-session / fetch-flash — the session + flash plugs for /account
   (:alias web/session)
   ; protect-from-forgery — CSRF check for the /account POST
-  (:alias web/csrf))
+  (:alias web/csrf)
+  ; compress — gzip/brotli every dynamic response body (static assets self-negotiate in web/endpoint)
+  (:alias web/compress))
 ; The view modules whose handlers the route table names below. Nothing else in the app
 ; loads them, so without these the qualified handler names resolve only when some
 ; sibling happens to have been loaded first (ADR-189).
@@ -32,57 +34,62 @@
 ; the router — so this file is purely the app's routes; handlers live under web/views.
 
 (defrouter app-router
-  (get "/" web/views/home/index)
-  ; A `through` pipeline at the *top level* — outside any live-session. Every route
-  ; inside runs through the listed plugs first; basic-auth halts with a 401 challenge
-  ; until the browser sends admin:admin, so /dev is gated without the handler knowing
-  ; anything about auth. Groups nest in any order: a `through` works at the top level
-  ; (here), inside a live-session, or wrapping one — see web/router's defrouter doc.
-  (through [(auth/basic-auth "admin" "admin" "hatch-demo dev")]
-    (get "/dev" web/views/diagnostics/dev-info))
-  ; HTTP Tier-1 demo: form body params + signed session + one-shot flash, with CSRF
-  ; protection. fetch-session loads/writes the signed cookie, fetch-flash does the one-shot
-  ; read, and protect-from-forgery mints a token (embedded in the form via csrf/csrf-input)
-  ; and rejects a POST whose token doesn't match. `save` does POST→redirect→GET.
-  (through [(session/fetch-session session-secret) session/fetch-flash csrf/protect-from-forgery]
-    (get "/account" web/views/account/index)
-    (post "/account" web/views/account/save)
-    ; Postgres-backed message board: GET lists + shows form, POST inserts + redirects.
-    (get "/messages" web/views/messages/index)
-    (post "/messages" web/views/messages/create)
-    ; Named path param demo: /messages/:id shows one message.
-    (get "/messages/:id" web/views/messages/show)
-    ; multipart/form-data upload + binary asset serving, Postgres-backed — see
-    ; web/endpoint's :spool-threshold for the in-memory/disk-spooled split this view
-    ; handles.
-    (get "/uploads" web/views/uploads/index)
-    (post "/uploads" web/views/uploads/create)
-    (get "/uploads/:id/file" web/views/uploads/show-file)
-    (post "/uploads/:id/delete" web/views/uploads/destroy))
-  ; Live views (web/live), grouped into two live-sessions — the socket-side auth
-  ; boundary. The same view module is mounted at distinct paths per session: navigating
-  ; within a session swaps over the open socket (no reload); crossing into the other
-  ; session forces a full reload. A path belongs to exactly one session, so the two
-  ; groups must use distinct paths.
-  (live-session "customer"
-    ; Plain pages (web/page): inline Hiccup vs a .bml template.
-    (get "/page-inline" web/views/page-inline/index)
-    (get "/page-template" web/views/page-template/index)
+  ; Compress every dynamic response (brotli/gzip, negotiated via Accept-Encoding). A
+  ; top-level `through` wraps all routes below; static assets are served in web/endpoint
+  ; before the router, so they keep their own precompressed-`.gz` negotiation and are
+  ; never double-compressed.
+  (through [(compress/compress)]
+    (get "/" web/views/home/index)
+    ; A `through` pipeline at the *top level* — outside any live-session. Every route
+    ; inside runs through the listed plugs first; basic-auth halts with a 401 challenge
+    ; until the browser sends admin:admin, so /dev is gated without the handler knowing
+    ; anything about auth. Groups nest in any order: a `through` works at the top level
+    ; (here), inside a live-session, or wrapping one — see web/router's defrouter doc.
+    (through [(auth/basic-auth "admin" "admin" "hatch-demo dev")]
+      (get "/dev" web/views/diagnostics/dev-info))
+    ; HTTP Tier-1 demo: form body params + signed session + one-shot flash, with CSRF
+    ; protection. fetch-session loads/writes the signed cookie, fetch-flash does the one-shot
+    ; read, and protect-from-forgery mints a token (embedded in the form via csrf/csrf-input)
+    ; and rejects a POST whose token doesn't match. `save` does POST→redirect→GET.
+    (through [(session/fetch-session session-secret) session/fetch-flash csrf/protect-from-forgery]
+      (get "/account" web/views/account/index)
+      (post "/account" web/views/account/save)
+      ; Postgres-backed message board: GET lists + shows form, POST inserts + redirects.
+      (get "/messages" web/views/messages/index)
+      (post "/messages" web/views/messages/create)
+      ; Named path param demo: /messages/:id shows one message.
+      (get "/messages/:id" web/views/messages/show)
+      ; multipart/form-data upload + binary asset serving, Postgres-backed — see
+      ; web/endpoint's :spool-threshold for the in-memory/disk-spooled split this view
+      ; handles.
+      (get "/uploads" web/views/uploads/index)
+      (post "/uploads" web/views/uploads/create)
+      (get "/uploads/:id/file" web/views/uploads/show-file)
+      (post "/uploads/:id/delete" web/views/uploads/destroy))
+    ; Live views (web/live), grouped into two live-sessions — the socket-side auth
+    ; boundary. The same view module is mounted at distinct paths per session: navigating
+    ; within a session swaps over the open socket (no reload); crossing into the other
+    ; session forces a full reload. A path belongs to exactly one session, so the two
+    ; groups must use distinct paths.
+    (live-session "customer"
+      ; Plain pages (web/page): inline Hiccup vs a .bml template.
+      (get "/page-inline" web/views/page-inline/index)
+      (get "/page-template" web/views/page-template/index)
 
-    (live "/counter" web/views/counter)
-    (live "/counter-inline" web/views/counter-inline)
-    ; A live form with as-you-type validation feedback over the socket.
-    (live "/signup" web/views/signup)
-    ; A real-time room: PubSub broadcast across all connected clients.
-    (live "/room" web/views/room)
-    ; Live presence: who's-here roster that updates as clients join/leave.
-    (live "/presence" web/views/presence)
-    ; Keyed-morph test: a list that reorders under live inputs, keeping their focus.
-    (live "/reorder" web/views/reorder)
-    ; on-mount-guard demo: redirects to /account until the session has a saved name.
-    (live "/dashboard" web/views/dashboard))
-  (live-session "admin"
-    (live "/admin/counter" web/views/counter)
-    (live "/admin/counter-inline" web/views/counter-inline))
-  ; /slow sleeps 2s before responding — exercises web/req-log's slow-request warn.
-  (get "/slow" web/views/diagnostics/slow-page))
+      (live "/counter" web/views/counter)
+      (live "/counter-inline" web/views/counter-inline)
+      ; A live form with as-you-type validation feedback over the socket.
+      (live "/signup" web/views/signup)
+      ; A real-time room: PubSub broadcast across all connected clients.
+      (live "/room" web/views/room)
+      ; Live presence: who's-here roster that updates as clients join/leave.
+      (live "/presence" web/views/presence)
+      ; Keyed-morph test: a list that reorders under live inputs, keeping their focus.
+      (live "/reorder" web/views/reorder)
+      ; on-mount-guard demo: redirects to /account until the session has a saved name.
+      (live "/dashboard" web/views/dashboard))
+    (live-session "admin"
+      (live "/admin/counter" web/views/counter)
+      (live "/admin/counter-inline" web/views/counter-inline))
+    ; /slow sleeps 2s before responding — exercises web/req-log's slow-request warn.
+    (get "/slow" web/views/diagnostics/slow-page)))
