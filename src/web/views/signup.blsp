@@ -32,14 +32,30 @@
     [:email form/email? "Hmm, that doesn't look like an email."]])
 
 (defn errors (model)
-  "The `{field message}` map for `model` — `{}` when every rule passes."
+  "The `{field message}` map for `model` — `{}` when every rule passes.
+
+  (hatch-demo/web/views/signup/errors {:name \"Ada\" :email \"ada@example.com\"}) ;=> {}"
   (match (form/validate model rules)
     ([:ok _] {})
     ([:error errs] errs)))
 
-(defn name-ok? (model) (nil? (form/error-for (errors model) :name)))
-(defn email-ok? (model) (nil? (form/error-for (errors model) :email)))
-(defn form-valid? (model) (= (count (errors model)) 0))
+(defn name-ok? (model)
+  "Whether `model`'s `:name` passes every rule.
+
+  (hatch-demo/web/views/signup/name-ok? {:name \"Ada\" :email \"ada@example.com\"}) ;=> true"
+  (nil? (form/error-for (errors model) :name)))
+
+(defn email-ok? (model)
+  "Whether `model`'s `:email` looks like an email.
+
+  (hatch-demo/web/views/signup/email-ok? {:name \"Ada\" :email \"nope\"}) ;=> false"
+  (nil? (form/error-for (errors model) :email)))
+
+(defn form-valid? (model)
+  "Whether every field of `model` passes — no errors at all.
+
+  (hatch-demo/web/views/signup/form-valid? {:name \"Ada\" :email \"ada@example.com\"}) ;=> true"
+  (= (count (errors model)) 0))
 
 ; ---- live view ----
 
