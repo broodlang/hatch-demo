@@ -49,7 +49,9 @@
 
 ;; ---- pure record builders (used by the process *and* the tests) -------------
 (defn start-record (rid method path)
-  "The `in` record logged on arrival in non-combined mode: `[rid] METHOD path`."
+  "The `in` record logged on arrival in non-combined mode: `[rid] METHOD path`.
+
+  (hatch-demo/web/req-log/start-record \"r1\" \"GET\" \"/\") ;=> {:level :debug :msg \"[r1] GET /\" :meta {:request_id \"r1\" :method \"GET\" :path \"/\" :event \"request.start\"}}"
   {:level :debug
    :msg (req-log-head rid method path)
    :meta (merge (req-log-base rid method path) {:event "request.start"})})

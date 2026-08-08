@@ -112,7 +112,9 @@
 (defn bytea-literal (bytes)
   "A Postgres bytea text-format literal (`\\x` + hex) for a raw `bytes` value — see
   db/uploads-schema's docstring for why this is built by hand rather than bound as a
-  `bytes` param directly."
+  `bytes` param directly.
+
+  (hatch-demo/web/views/uploads/bytea-literal (string->utf8-bytes \"AB\")) ;=> \"\\\\x4142\""
   (str "\\x" (encoding/hex-encode-bytes bytes)))
 
 (defn create (conn)
