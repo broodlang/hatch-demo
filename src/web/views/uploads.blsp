@@ -139,15 +139,35 @@
           (session/put-flash "info" "Uploaded!")
           (redirect-resp "/uploads"))))))
 
+(defn safe-attachment-filename (filename)
+  "A filename safe to place inside a `Content-Disposition` quoted-string: `\"` and `\\`
+  stripped (CR/LF are already dropped by the response serializer's `header-safe`), with a
+  plain fallback for a blank name.
+
+  (hatch-demo/web/views/uploads/safe-attachment-filename \"a\\\"b.png\") ;=> \"ab.png\"
+  (hatch-demo/web/views/uploads/safe-attachment-filename \"\") ;=> \"upload\""
+  (let (cleaned (replace (replace (or filename "") "\"" "") "\\" ""))
+    (if (= (trim cleaned) "") "upload" cleaned)))
+
 (defn show-file (conn)
   "GET /uploads/:id/file — the stored file's bytes, byte-faithfully, straight out of
-  Postgres (no filesystem involved at all)."
+  Postgres (no filesystem involved at all).
+
+  The stored `content_type` is attacker-controlled (it is whatever the upload's multipart
+  part declared), so serving the bytes back inline would let an uploaded `text/html` (or
+  SVG) file execute script on this origin — stored XSS. Two defenses close that: a
+  `Content-Disposition: attachment` forces a download rather than an inline render, and
+  `X-Content-Type-Options: nosniff` stops the browser from second-guessing the declared
+  type. The bytes themselves are still served exactly as stored."
   (let (id (string->number (or (param conn "id") "0"))
         u (db/get-upload id))
     (if (nil? u)
       (not-found-resp conn)
       (-> conn
         (put-resp-header :content-type (get u :content_type))
+        (put-resp-header :x-content-type-options "nosniff")
+        (put-resp-header :content-disposition
+          (str "attachment; filename=\"" (safe-attachment-filename (get u :filename)) "\""))
         (send-resp 200 (get u :data))))))
 
 (defn destroy (conn)
