@@ -4,7 +4,7 @@
 (defmodule web-views-reorder-view-test
   (:use web/test)
   (:alias web/views/reorder)
-  ; interleave — splices a live render's static and dynamic halves
+  ; weave — splices a live render's static and dynamic halves
   (:alias web/parts)
   (:use test))
 
@@ -36,7 +36,7 @@
   (test "minimal-diff parts reassemble to the full render"
     (let (spec (reorder/live-spec)
           m (live-mount spec {}))
-      (assert= (parts/interleave (get spec :render-static) ((get spec :render-dynamic) m))
+      (assert= (parts/weave (get spec :render-static) ((get spec :render-dynamic) m))
         (live-render spec m))))
   (test "mount reads an initial ?highlight= param"
     (assert= (get (live-mount (reorder/live-spec) {"highlight" "grace"}) :highlight) "grace"))
