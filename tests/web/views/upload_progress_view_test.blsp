@@ -1,0 +1,67 @@
+;; Tests for the live upload-progress view. The model logic and handle-info are tested as
+;; plain functions; the telemetry → pubsub → handle-info chain itself is covered by Hatch's
+;; own web/upload tests. We avoid live-mount here so the test process doesn't actually
+;; subscribe to an upload topic (mount calls upload/watch).
+(defmodule web-views-upload-progress-view-test
+  ; live-info / live-render — from the dep
+  (:use web/test)
+  (:alias web/views/upload-progress)
+  (:use test))
+
+(defn model (&optional (over {}))
+  "A mounted-looking model for token \"t1\", with `over` merged on top."
+  (merge {:token "t1" :percent 0 :got 0 :total 0 :done? false} over))
+
+(describe "upload-progress model"
+  (test "init starts at zero for the given token"
+    (let (m (upload-progress/init "abc"))
+      (assert= (get m :token) "abc")
+      (assert= (get m :percent) 0)
+      (assert= (get m :done?) false)))
+  (test "apply-progress folds in an event for this token"
+    (let (m (upload-progress/apply-progress (model)
+              {:token "t1" :got 50 :total 200 :percent 25 :done? false}))
+      (assert= (get m :percent) 25)
+      (assert= (get m :got) 50)
+      (assert= (get m :total) 200)))
+  (test "apply-progress ignores an event for a different token"
+    (assert= (upload-progress/apply-progress (model)
+               {:token "other" :got 50 :total 200 :percent 25 :done? false})
+      (model)))
+  (test "the completing event sets done?"
+    (assert= (get (upload-progress/apply-progress (model)
+                    {:token "t1" :got 200 :total 200 :percent 100 :done? true})
+               :done?)
+      true)))
+
+(describe "human-bytes"
+  (test "bytes below a kilobyte" (assert= (upload-progress/human-bytes 512) "512 B"))
+  (test "kilobytes" (assert= (upload-progress/human-bytes 2048) "2 KB"))
+  (test "megabytes" (assert= (upload-progress/human-bytes 5242880) "5 MB")))
+
+(describe "status-line"
+  (test "waiting before anything has arrived"
+    (assert= (upload-progress/status-line (model)) "Waiting for an upload…"))
+  (test "counts while the body is arriving"
+    (assert= (upload-progress/status-line (model {:got 2048 :total 5242880}))
+      "2 KB of 5 MB"))
+  (test "hands off to processing once the body is read — the file is not saved yet"
+    (assert= (upload-progress/status-line (model {:got 10 :total 10 :done? true}))
+      "Body received — processing…")))
+
+(describe "upload-progress live view"
+  (test "handle-info folds a progress payload into the model"
+    (let (m (live-info (upload-progress/live-spec)
+              {:upload {:token "t1" :got 50 :total 200 :percent 25 :done? false}}
+              (model)))
+      (assert= (get m :percent) 25)))
+  (test "handle-info ignores a message that isn't an upload payload"
+    (assert= (live-info (upload-progress/live-spec) {:something :else} (model)) (model)))
+  (test "render shows the bar, the caption, and the tokened POST target"
+    (let (html (live-render (upload-progress/live-spec)
+                 (model {:got 2048 :total 5242880 :percent 40})))
+      (assert= (includes? html "40%") true)
+      (assert= (includes? html "2 KB of 5 MB") true)
+      ; the upload token rides on the POST URL as a query param — the head is parsed
+      ; before any body byte, so a hidden field would be invisible in time
+      (assert= (includes? html "/uploads?upload_token=t1") true))))
