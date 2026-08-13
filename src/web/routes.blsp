@@ -23,6 +23,7 @@
 (require 'web/views/diagnostics)
 (require 'web/views/messages)
 (require 'web/views/uploads)
+(require 'web/views/upload-progress)
 (require 'web/views/page-inline)
 (require 'web/views/page-template)
 ; The secret that signs session cookies. In a real app this comes from the environment
@@ -65,7 +66,10 @@
       (get "/uploads" web/views/uploads/index)
       (post "/uploads" web/views/uploads/create)
       (get "/uploads/:id/file" web/views/uploads/show-file)
-      (post "/uploads/:id/delete" web/views/uploads/destroy))
+      (post "/uploads/:id/delete" web/views/uploads/destroy)
+      ; CSRF-token bootstrap for the live upload-progress view, which has no Conn to
+      ; render a token from — see web/views/uploads/csrf-token.
+      (get "/csrf-token" web/views/uploads/csrf-token))
     ; Live views (web/live), grouped into two live-sessions — the socket-side auth
     ; boundary. The same view module is mounted at distinct paths per session: navigating
     ; within a session swaps over the open socket (no reload); crossing into the other
@@ -86,6 +90,9 @@
       (live "/presence" web/views/presence)
       ; Keyed-morph test: a list that reorders under live inputs, keeping their focus.
       (live "/reorder" web/views/reorder)
+      ; Live upload progress: the bar is fed by the server as it reads a multipart POST
+      ; on a *different* connection, tied to this session by an upload token.
+      (live "/upload-progress" web/views/upload-progress)
       ; on-mount-guard demo: redirects to /account until the session has a saved name.
       (live "/dashboard" web/views/dashboard))
     (live-session "admin"

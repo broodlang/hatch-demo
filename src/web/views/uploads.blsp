@@ -177,3 +177,16 @@
     (-> conn
       (session/put-flash "info" "Deleted.")
       (redirect-resp "/uploads"))))
+
+(defn csrf-token (conn)
+  "GET /csrf-token — the current session's CSRF token as JSON.
+
+  A CSRF-token bootstrap for clients that cannot be handed one in their HTML: the live
+  upload-progress view (`web/views/upload-progress`) has no Conn in `render`, so unlike
+  every other form here it cannot call `csrf/csrf-input`. This route sits inside the
+  router's CSRF `through` pipeline, so `csrf/token` mints-or-reads the token bound to the
+  signed session cookie — the same token the POST is then checked against. Handing it out
+  to the session it already belongs to grants nothing: an attacker's cross-site page
+  cannot read this response (no CORS grant), which is exactly the property synchronizer-
+  token CSRF relies on."
+  (json-resp conn (str "{\"token\":\"" (csrf/token conn) "\"}")))
