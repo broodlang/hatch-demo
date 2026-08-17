@@ -1,0 +1,149 @@
+; checked: this module must define mount/render/handle-event
+(defmodule web/views/upload-progress
+  "Live upload progress — a progress bar that fills as the server actually reads the
+  bytes, not as the browser thinks it sent them.
+
+  The interesting part is that the upload and the bar travel over *different
+  connections*: the file goes up as an ordinary `multipart/form-data` POST to
+  `/uploads` (the same plain handler `web/views/uploads` already uses), while the bar
+  lives in this live view's WebSocket. `web/upload` introduces the two with a token —
+  `mount` calls `(upload/watch)`, which mints one and subscribes this session to it,
+  and `upload/action` hangs it on the POST's URL as `?upload_token=…`.
+
+  It has to be a query param rather than a hidden form field: hatch parses the request
+  head before it reads a single body byte, so the query string is the only part of the
+  request visible in time to report on the body's arrival. (For a *spooled* body — this
+  demo's endpoint spools past 200 KB — a hidden field would additionally never be parsed
+  at all; see `web/views/uploads`' docstring on the same problem with the CSRF token.)
+
+  From there hatch emits one `[:hatch :upload :progress]` telemetry event per read
+  (throttled), `main` has `:upload-progress true` so those become pubsub broadcasts, and
+  each lands here at `handle-info` as `{:upload {…}}`. Pick a large file (over a few MB)
+  to actually watch it climb — a small one arrives in a single read and jumps to 100%.
+
+  **The CSRF wrinkle, and why `GET /csrf-token` exists.** A live view's `render` has no
+  Conn — `mount` takes only `(params)` — so unlike every other form in this demo it
+  cannot call `csrf/token` or `csrf/csrf-input`. The token is minted from (and tied to)
+  the signed session cookie, so the page bootstraps it the way an SPA does: fetch it from
+  a small endpoint that *is* inside the router's CSRF pipeline, then send it as an
+  `X-CSRF-Token` header. That keeps the upload POST fully protected without weakening the
+  pipeline or teaching a CSRF-less endpoint. It is a real ergonomic gap in hatch, noted in
+  the framework's roadmap rather than papered over here.
+
+  Note `:done?` means *the body has been read*, not *the file is saved*: the POST handler
+  runs after that, which is why the bar hands off to \"processing…\" rather than claiming
+  success. Wired with `(live \"/upload-progress\" …)`."
+  ; deflive
+  (:use web/live)
+  ; raw — the uploader's inline <script> body
+  (:use web/template)
+  ; watch / action — the token that ties this session to the POST
+  (:alias web/upload)
+  (:implements LiveModule))
+
+;; ---- backend logic ----
+
+(defn init (token)
+  "A fresh model: a watched upload token, and a bar at zero."
+  {:token token :percent 0 :got 0 :total 0 :done? false})
+
+(defn apply-progress (model up)
+  "Fold one `{:upload …}` payload into the model. Ignores an event for a *different*
+  token — this session is only ever subscribed to its own, but a view watching several
+  uploads at once would dispatch on this."
+  (if (= (get up :token) (get model :token))
+    (assoc model
+      :percent (get up :percent 0)
+      :got (get up :got 0)
+      :total (get up :total 0)
+      :done? (get up :done? false))
+    model))
+
+(defn human-bytes (n)
+  "`n` as a rough human-readable size — the bar's caption.
+
+  (web/views/upload-progress/human-bytes 512) ;=> \"512 B\"
+  (web/views/upload-progress/human-bytes 2048) ;=> \"2 KB\"
+  (web/views/upload-progress/human-bytes 5242880) ;=> \"5 MB\""
+  (cond
+    (< n 1024) (str n " B")
+    (< n 1048576) (str (quot n 1024) " KB")
+    else (str (quot n 1048576) " MB")))
+
+(defn status-line (model)
+  "What the bar says underneath itself, in each of its three states."
+  (cond
+    (get model :done?) "Body received — processing…"
+    (> (get model :total) 0)
+      (str (human-bytes (get model :got)) " of " (human-bytes (get model :total)))
+    else "Waiting for an upload…"))
+
+;; ---- live view ----
+
+(deflive (mount (params) (init (upload/watch)))
+
+  ; A progress event for this session's token, delivered by web/upload over pubsub.
+  ; Anything else arriving on the topic is ignored rather than crashing the session.
+  (handle-info (msg model)
+    (let (up (get msg :upload))
+      (if up (apply-progress model up) model)))
+
+  (render (model)
+    [:div
+      {:class "space-y-4"}
+      [:h1 {:class "text-2xl font-bold"} "Live upload progress"]
+      [:p
+        {:class "opacity-70"}
+        "The bar below is driven by the server as it reads the body — a different "
+        "connection from this page's WebSocket, tied to it by an upload token. "
+        "Pick a large file (a few MB) to watch it climb."]
+      [:div
+        {:class "card bg-base-200"}
+        [:div
+          {:class "card-body space-y-3"}
+          [:input
+            {:type "file"
+             :id "upload-input"
+             :class "file-input file-input-bordered w-full"}]
+          [:progress
+            {:class "progress progress-primary w-full"
+             :value (get model :percent)
+             :max 100}]
+          [:div
+            {:class "flex justify-between text-sm"}
+            [:span {:class "opacity-70"} (status-line model)]
+            [:span {:class "font-mono"} (str (get model :percent) "%")]]
+          [:div
+            {:class "card-actions"}
+            [:button {:type "button" :id "upload-btn" :class "btn btn-primary"} "Upload"]]]]
+      ; the POST target, carrying this session's upload token as a query param
+      [:div
+        {:id "upload-cfg"
+         :data-action (upload/action "/uploads" (get model :token))
+         :class "hidden"}]
+      uploader-script]))
+
+(def uploader-script
+  [:script
+    {}
+    (raw
+      "
+      document.getElementById('upload-btn').addEventListener('click', async () => {
+        const cfg = document.getElementById('upload-cfg');
+        const fileInput = document.getElementById('upload-input');
+        if (!fileInput.files[0]) return;
+        // A live view has no Conn, so it cannot render a CSRF token into the page.
+        // Bootstrap it from the session the way an SPA would, then send it as a header
+        // (a spooled multipart body is never parsed for a hidden field anyway).
+        const csrf = (await (await fetch('/csrf-token')).json()).token;
+        const fd = new FormData();
+        fd.append('upload', fileInput.files[0]);
+        // The bar is NOT driven by this fetch's own progress — it is driven by the
+        // server telling us, over the live socket, how much of the body it has read.
+        await fetch(cfg.dataset.action, {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrf },
+          body: fd,
+        });
+      });
+    ")])
