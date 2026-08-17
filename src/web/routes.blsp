@@ -15,16 +15,8 @@
   (:alias web/csrf)
   ; compress — gzip/brotli every dynamic response body (static assets self-negotiate in web/endpoint)
   (:alias web/compress))
-; The view modules whose handlers the route table names below. Nothing else in the app
-; loads them, so without these the qualified handler names resolve only when some
-; sibling happens to have been loaded first (ADR-189).
-(require 'web/views/home)
-(require 'web/views/account)
-(require 'web/views/diagnostics)
-(require 'web/views/messages)
-(require 'web/views/uploads)
-(require 'web/views/page-inline)
-(require 'web/views/page-template)
+; The view modules whose handlers the route table names below are referenced by their
+; qualified `web/views/…/handler` names in the router, which auto-loads each module.
 ; The secret that signs session cookies. In a real app this comes from the environment
 ; ($HATCH_SECRET_KEY_BASE); the dev fallback keeps `nest run` zero-config. Never ship the
 ; fallback — anyone with it can forge sessions.

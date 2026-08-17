@@ -83,7 +83,7 @@
   (let (rid (random-token 4)
         conn (conn/assign (conn/build request) :request-id rid)
         start (now-ns)
-        elapsed (fn () (round-to (/ (- (now-ns) start) 1000000.0) 2)))
+        elapsed (fn () (math/round-to (/ (- (now-ns) start) 1000000.0) 2)))
     ;; Open before the handler runs, so req-log's watchdog can flag a slow one.
     (req-log/open rid (get conn :method) (get conn :path))
     ;; Run the handler off this process; `h` (the task handle) tags its reply, so the
