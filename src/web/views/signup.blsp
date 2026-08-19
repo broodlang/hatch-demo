@@ -131,14 +131,14 @@
   (cond
     (name-ok? model)
       (feedback-line "text-success"
-        (str "Looks good — " (string-length (get model :name)) " characters."))
+        (str "Looks good — " (string/length (get model :name)) " characters."))
     (get model :attempted?) (feedback-line "text-error" (form/error-for (errors model) :name))
     else (feedback-line "opacity-60" "Tell us your name.")))
 
 (defn email-feedback (model)
   (cond
     (email-ok? model) (feedback-line "text-success" "That's a valid-looking email ✓")
-    (blank? (get model :email))
+    (string/blank? (get model :email))
       (if (get model :attempted?)
         (feedback-line "text-error" (form/error-for (errors model) :email))
         (feedback-line "opacity-60" "We'll only use this to reply."))

@@ -18,9 +18,9 @@
       nil
       (let (sc (first cookies)
             eq (index-of sc "=")
-            tail (substring sc (+ eq 1) (string-length sc))
+            tail (string/substring sc (+ eq 1) (string/length sc))
             semi (index-of tail ";"))
-        (substring tail 0 semi)))))
+        (string/substring tail 0 semi)))))
 
 (defn get-with (cookie)
   "GET /account carrying the session `cookie`."
@@ -94,7 +94,7 @@
       (assert= (body-contains? g "Cleared your name.") true)
       (assert= (body-contains? g "know your name yet") true)))
   (test "a too-long name is rejected by web/form's max-length? rule, session untouched"
-    (let (long-name (string-repeat "a" 51)
+    (let (long-name (string/repeat "a" 51)
           resp (save-name long-name)
           cookie (session-cookie resp)
           g (get-with cookie))
