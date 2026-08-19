@@ -146,8 +146,8 @@
 
   (hatch-demo/web/views/uploads/safe-attachment-filename \"a\\\"b.png\") ;=> \"ab.png\"
   (hatch-demo/web/views/uploads/safe-attachment-filename \"\") ;=> \"upload\""
-  (let (cleaned (replace (replace (or filename "") "\"" "") "\\" ""))
-    (if (= (trim cleaned) "") "upload" cleaned)))
+  (let (cleaned (string/replace (string/replace (or filename "") "\"" "") "\\" ""))
+    (if (= (string/trim cleaned) "") "upload" cleaned)))
 
 (defn show-file (conn)
   "GET /uploads/:id/file — the stored file's bytes, byte-faithfully, straight out of

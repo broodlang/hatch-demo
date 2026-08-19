@@ -57,10 +57,10 @@
   (let (path (get conn :path))
     (cond
       (= path "/static/brood_live.js") (serve-client-js conn)
-      (starts-with? path "/static/")
+      (string/starts-with? path "/static/")
         (static/serve conn
           "static"
-          (substring path 8 (string-length path)))
+          (string/substring path 8 (string/length path)))
       else nil)))
 
 ; A handler still running after this is hard-killed (504) — a backstop for a wedged
@@ -127,7 +127,7 @@
   (let (cert-file (getenv "TLS_CERT_FILE")
         key-file (getenv "TLS_KEY_FILE"))
     (cond
-      (and cert-file key-file) {:cert (slurp cert-file) :key (slurp key-file)}
+      (and cert-file key-file) {:cert (file/slurp cert-file) :key (file/slurp key-file)}
       (and (dev?) (getenv "HATCH_TLS"))
         (let ([cert key] (tls-self-signed "localhost"))
           {:cert cert :key key})

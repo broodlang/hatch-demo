@@ -28,7 +28,7 @@
 
 (deflive (on-mount-guard (conn)
            (let (conn ((session/fetch-session session-secret) conn))
-             (if (blank? (session/get-session conn "name" ""))
+             (if (string/blank? (session/get-session conn "name" ""))
                "/account"
                nil)))
 

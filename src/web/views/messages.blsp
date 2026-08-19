@@ -133,7 +133,7 @@
 (defn error-summary (errs)
   "Every error message in `errs`, space-joined — there are only ever one or two fields
   here, so a plain join reads fine without needing per-field placement in the form."
-  (join " " (vals errs)))
+  (string/join " " (vals errs)))
 
 (defn create (conn)
   "POST /messages — validate (web/form), insert into Postgres on success, and PRG-redirect
