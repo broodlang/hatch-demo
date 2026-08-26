@@ -80,10 +80,10 @@
   ;; together — grep one id to follow a single request. It's stashed on the conn as
   ;; :request-id, so handlers can include it in their own log lines. `elapsed` is a thunk
   ;; so every exit path times from the same `start`.
-  (let (rid (random-token 4)
+  (let (rid (rand/token 4)
         conn (conn/assign (conn/build request) :request-id rid)
-        start (now-ns)
-        elapsed (fn () (math/round-to (/ (- (now-ns) start) 1000000.0) 2)))
+        start (os/now-ns)
+        elapsed (fn () (math/round-to (/ (- (os/now-ns) start) 1000000.0) 2)))
     ;; Open before the handler runs, so req-log's watchdog can flag a slow one.
     (req-log/open rid (get conn :method) (get conn :path))
     ;; Run the handler off this process; `h` (the task handle) tags its reply, so the
@@ -107,29 +107,29 @@
 
 (defn port ()
   "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
-  (or (string->number (or (getenv "HATCH_PORT") "")) 5000))
+  (or (string/->number (or (os/getenv "HATCH_PORT") "")) 5000))
 
 (defn dev? ()
   "True unless $HATCH_ENV names a non-dev environment — so dev is the zero-config
   default and the asset watcher starts on a plain `nest run`."
-  (= (or (getenv "HATCH_ENV") "dev") "dev"))
+  (= (or (os/getenv "HATCH_ENV") "dev") "dev"))
 
 (defn combine-logs? ()
   "Whether req-log folds each request into one line: false when $LOG_COMBINE is
   \"separate\" (an `in` line on arrival + an `out` line on completion), else true."
-  (not (= (getenv "LOG_COMBINE") "separate")))
+  (not (= (os/getenv "LOG_COMBINE") "separate")))
 
 (defn tls-config ()
   "The server's TLS config — `{:cert <pem> :key <pem>}` to serve HTTPS, or nil (plaintext).
   Precedence: explicit PEM files in $TLS_CERT_FILE/$TLS_KEY_FILE (production); else, in dev
   with $HATCH_TLS set, a generated self-signed localhost cert (zero-config dev HTTPS); else
   plaintext. So dev stays plain HTTP by default — opt into dev TLS with HATCH_TLS=1."
-  (let (cert-file (getenv "TLS_CERT_FILE")
-        key-file (getenv "TLS_KEY_FILE"))
+  (let (cert-file (os/getenv "TLS_CERT_FILE")
+        key-file (os/getenv "TLS_KEY_FILE"))
     (cond
       (and cert-file key-file) {:cert (file/slurp cert-file) :key (file/slurp key-file)}
-      (and (dev?) (getenv "HATCH_TLS"))
-        (let ([cert key] (tls-self-signed "localhost"))
+      (and (dev?) (os/getenv "HATCH_TLS"))
+        (let ([cert key] (tls/self-signed "localhost"))
           {:cert cert :key key})
       else nil)))
 
@@ -148,7 +148,7 @@
       (try
         (assets/fingerprint (get *assets* :fingerprint))
         (catch e
-          (println (str "[assets] prod fingerprint skipped ("
+          (io/puts (str "[assets] prod fingerprint skipped ("
                      (error-message e)
                      "); serving plain asset URLs"))))))
   (req-log/start-req-log {:combine? (combine-logs?)})

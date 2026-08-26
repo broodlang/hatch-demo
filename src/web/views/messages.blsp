@@ -54,7 +54,7 @@
   "GET /messages/:id — a single message, or a not-found note. The `:id` path segment
   arrives in `(get conn :params)` as a string; the schema's `:id` column is an integer, so
   it's parsed before querying."
-  (let (id (string->number (or (param conn "id") "0"))
+  (let (id (string/->number (or (param conn "id") "0"))
         msg (db/get-message id))
     (page conn
       (layout "Message"

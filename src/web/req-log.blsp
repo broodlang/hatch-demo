@@ -27,7 +27,7 @@
   :error never downgrades. A completion that beats the watchdog clears the entry, so the
   later tick is a no-op. If no process is running, calls log standalone (still
   structured), so a log is never lost."
-  ; defprocess / spawn-server / !
+  ; defprocess / spawn-server / cast
   (:use gen)
   ; log/log — the real sink each record is written to
   (:alias log))
@@ -154,7 +154,7 @@
   Falls back to logging the `in` record immediately if no process runs. Returns nil."
   (let (pid (req-logger))
     (if pid
-      (! pid [:open rid method path])
+      (cast pid [:open rid method path])
       (req-log-emit (start-record rid method path))))
   nil)
 
@@ -163,7 +163,7 @@
   deadline. Returns nil."
   (let (pid (req-logger))
     (if pid
-      (! pid [:close rid status ms])
+      (cast pid [:close rid status ms])
       (req-log-emit (done-record rid "?" "?" status ms false))))
   nil)
 
@@ -171,6 +171,6 @@
   "Finish `rid` on failure — the `out` line at :error. Returns nil."
   (let (pid (req-logger))
     (if pid
-      (! pid [:fail rid status ms err])
+      (cast pid [:fail rid status ms err])
       (req-log-emit (error-record rid "?" "?" status ms err))))
   nil)

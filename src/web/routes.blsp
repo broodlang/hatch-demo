@@ -22,7 +22,7 @@
 ; ($HATCH_SECRET_KEY_BASE); the dev fallback keeps `nest run` zero-config. Never ship the
 ; fallback — anyone with it can forge sessions.
 (def session-secret
-  (or (getenv "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
+  (or (os/getenv "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
 ; Static assets (the live-view client + ./static) are served by web/endpoint, before
 ; the router — so this file is purely the app's routes; handlers live under web/views.
 
