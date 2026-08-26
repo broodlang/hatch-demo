@@ -20,7 +20,7 @@
   ; Track this session under a short visitor id, then seed the roster synchronously (the
   ; `roster` call runs after `track`, so it already includes us).
   (mount (params)
-    (let (id (random-token 3))
+    (let (id (rand/token 3))
       (presence/track topic id {})
       {:id id :members (presence/roster topic)}))
 

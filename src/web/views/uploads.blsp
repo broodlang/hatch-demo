@@ -114,7 +114,7 @@
   db/uploads-schema's docstring for why this is built by hand rather than bound as a
   `bytes` param directly.
 
-  (hatch-demo/web/views/uploads/bytea-literal (string->utf8-bytes \"AB\")) ;=> \"\\\\x4142\""
+  (hatch-demo/web/views/uploads/bytea-literal (string/->bytes \"AB\")) ;=> \"\\\\x4142\""
   (str "\\x" (encoding/hex-encode-bytes bytes)))
 
 (defn create (conn)
@@ -159,7 +159,7 @@
   `Content-Disposition: attachment` forces a download rather than an inline render, and
   `X-Content-Type-Options: nosniff` stops the browser from second-guessing the declared
   type. The bytes themselves are still served exactly as stored."
-  (let (id (string->number (or (param conn "id") "0"))
+  (let (id (string/->number (or (param conn "id") "0"))
         u (db/get-upload id))
     (if (nil? u)
       (not-found-resp conn)
@@ -172,7 +172,7 @@
 
 (defn destroy (conn)
   "POST /uploads/:id/delete — remove the row and redirect back to GET /uploads (PRG)."
-  (let (id (string->number (or (param conn "id") "0")))
+  (let (id (string/->number (or (param conn "id") "0")))
     (db/delete-upload id)
     (-> conn
       (session/put-flash "info" "Deleted.")

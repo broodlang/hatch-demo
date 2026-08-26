@@ -8,4 +8,4 @@
   (let (o (pg/opts-from-env "hatch_demo"))
     (pg/create-database o)
     (db/start o)
-    (println "Done. Run `nest run` to start the server.")))
+    (io/puts "Done. Run `nest run` to start the server.")))

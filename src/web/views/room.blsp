@@ -17,7 +17,7 @@
 
 (defn init ()
   "A fresh model: a short visitor id for this session, an empty activity log, a wave count."
-  {:id (random-token 3) :events (list) :waves 0})
+  {:id (rand/token 3) :events (list) :waves 0})
 
 (defn record (model text)
   "Prepend `text` to the activity log, capped at max-events, and bump the wave count."

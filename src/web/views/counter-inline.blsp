@@ -10,7 +10,7 @@
   (:implements LiveModule))
 
 (deflive (mount (params)
-           (init (string->number (get params "start" "0"))))
+           (init (string/->number (get params "start" "0"))))
 
   (render (model)
     ; The Hiccup that counter.bml lowers to: `{@count}` is `(get model :count)`, and the
