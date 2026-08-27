@@ -67,8 +67,8 @@
   (web/views/upload-progress/human-bytes 5242880) ;=> \"5 MB\""
   (cond
     (< n 1024) (str n " B")
-    (< n 1048576) (str (quot n 1024) " KB")
-    else (str (quot n 1048576) " MB")))
+    (< n 1048576) (str (math/quot n 1024) " KB")
+    else (str (math/quot n 1048576) " MB")))
 
 (defn status-line (model)
   "What the bar says underneath itself, in each of its three states."

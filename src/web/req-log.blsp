@@ -141,13 +141,13 @@
   line on `open` and an `out` line on completion. Replaces any previous `:req-log`."
   (let (o (if (empty? opts) {} (first opts))
         combine? (if (nil? (get o :combine?)) true (get o :combine?))
-        pid (spawn-server req-log-server {:combine? combine? :pending {}}))
-    (register :req-log pid)
+        pid (gen/start req-log-server {:combine? combine? :pending {}}))
+    (proc/register :req-log pid)
     pid))
 
 (defn req-logger ()
   "The pid of the running tracking process (registered `:req-log`), or nil."
-  (whereis :req-log))
+  (proc/whereis :req-log))
 
 (defn open (rid method path)
   "Begin tracking `rid` before the handler runs, so the watchdog can flag a slow one.
