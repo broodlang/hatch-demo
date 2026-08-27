@@ -24,7 +24,7 @@
 ; Mirrors web/routes' session-secret one-liner. Not imported from there: web/routes
 ; already requires this module to wire the route, so importing back would be a cycle.
 (def session-secret
-  (or (os/getenv "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
+  (or (os/env "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
 
 (deflive (on-mount-guard (conn)
            (let (conn ((session/fetch-session session-secret) conn))

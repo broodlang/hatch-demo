@@ -107,28 +107,28 @@
 
 (defn port ()
   "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
-  (or (string/->number (or (os/getenv "HATCH_PORT") "")) 5000))
+  (or (string/->number (or (os/env "HATCH_PORT") "")) 5000))
 
 (defn dev? ()
   "True unless $HATCH_ENV names a non-dev environment — so dev is the zero-config
   default and the asset watcher starts on a plain `nest run`."
-  (= (or (os/getenv "HATCH_ENV") "dev") "dev"))
+  (= (or (os/env "HATCH_ENV") "dev") "dev"))
 
 (defn combine-logs? ()
   "Whether req-log folds each request into one line: false when $LOG_COMBINE is
   \"separate\" (an `in` line on arrival + an `out` line on completion), else true."
-  (not (= (os/getenv "LOG_COMBINE") "separate")))
+  (not (= (os/env "LOG_COMBINE") "separate")))
 
 (defn tls-config ()
   "The server's TLS config — `{:cert <pem> :key <pem>}` to serve HTTPS, or nil (plaintext).
   Precedence: explicit PEM files in $TLS_CERT_FILE/$TLS_KEY_FILE (production); else, in dev
   with $HATCH_TLS set, a generated self-signed localhost cert (zero-config dev HTTPS); else
   plaintext. So dev stays plain HTTP by default — opt into dev TLS with HATCH_TLS=1."
-  (let (cert-file (os/getenv "TLS_CERT_FILE")
-        key-file (os/getenv "TLS_KEY_FILE"))
+  (let (cert-file (os/env "TLS_CERT_FILE")
+        key-file (os/env "TLS_KEY_FILE"))
     (cond
       (and cert-file key-file) {:cert (file/slurp cert-file) :key (file/slurp key-file)}
-      (and (dev?) (os/getenv "HATCH_TLS"))
+      (and (dev?) (os/env "HATCH_TLS"))
         (let ([cert key] (tls/self-signed "localhost"))
           {:cert cert :key key})
       else nil)))
