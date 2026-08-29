@@ -27,7 +27,7 @@
   :error never downgrades. A completion that beats the watchdog clears the entry, so the
   later tick is a no-op. If no process is running, calls log standalone (still
   structured), so a log is never lost."
-  ; defprocess / spawn-server / cast
+  ; defserver / spawn-server / cast
   (:use gen)
   ; log/log — the real sink each record is written to
   (:alias log))
@@ -95,7 +95,7 @@
   (sleep req-log-timeout-ms)
   (send srv [:timeout rid]))
 
-(defprocess req-log-server
+(defserver req-log-server
   (state)
   "Carries `{:combine? bool :pending {rid -> {:method :path :slow? bool}}}`. `open` stashes
   the request, arms a watchdog, and (in non-combined mode) logs the `in` record; `close` /
