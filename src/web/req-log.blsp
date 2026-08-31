@@ -37,13 +37,11 @@
 (def- req-log-timeout-ms 1000)
 (def- req-log-deadline (str (/ req-log-timeout-ms 1000) "s"))
 
-(defn- req-log-head
-  (rid method path)
+(defn- req-log-head (rid method path)
   "The human prefix every line for a request shares: `[rid] METHOD path`."
   (str "[" rid "] " method " " path))
 
-(defn- req-log-base
-  (rid method path)
+(defn- req-log-base (rid method path)
   "The machine fields every record for a request carries."
   {:request_id rid :method method :path path})
 
@@ -81,15 +79,13 @@
    :meta (merge (req-log-base rid method path)
            {:event "request.pending" :after_ms req-log-timeout-ms})})
 
-(defn- req-log-emit
-  (rec)
+(defn- req-log-emit (rec)
   "Write a record through the real logger at its `:level`, carrying its `:meta`."
   (log/log (get rec :level) (get rec :msg) (get rec :meta))
   nil)
 
 ;; ---- the in-flight tracking process -----------------------------------------
-(defn- req-log-watchdog
-  (srv rid)
+(defn- req-log-watchdog (srv rid)
   "Run in a fresh process by `open`: sleep the deadline, then tell `srv` that `rid` is
   overdue. `srv` ignores the tick if the request already finished."
   (sleep req-log-timeout-ms)
@@ -118,12 +114,7 @@
       (update state :pending dissoc rid)))
   (cast [:fail rid status ms err]
     (let (e (get (get state :pending) rid))
-      (req-log-emit (error-record rid
-                      (or (get e :method) "?")
-                      (or (get e :path) "?")
-                      status
-                      ms
-                      err))
+      (req-log-emit (error-record rid (or (get e :method) "?") (or (get e :path) "?") status ms err))
       (update state :pending dissoc rid)))
   (info [:timeout rid]
     (let (e (get (get state :pending) rid))
