@@ -14,7 +14,7 @@
 
 (defn member-keys (model)
   "The visitor ids currently present, from the model's roster."
-  (map (fn (m) (get m :key)) (get model :members (list))))
+  (map (get model :members (list)) (fn (m) (get m :key))))
 
 (deflive
   ; Track this session under a short visitor id, then seed the roster synchronously (the
@@ -58,11 +58,11 @@
   (let (keys (member-keys model))
     [:ul
       {:class "menu p-0 w-full"}
-      (map (fn (k)
-             [:li
-               {}
-               [:span
-                 {:class "px-2 py-1"}
-                 (str "visitor " k)
-                 (if (= k (get model :id)) [:span {:class "badge badge-sm ml-2"} "you"] "")]])
-        keys)]))
+      (map keys
+        (fn (k)
+          [:li
+            {}
+            [:span
+              {:class "px-2 py-1"}
+              (str "visitor " k)
+              (if (= k (get model :id)) [:span {:class "badge badge-sm ml-2"} "you"] "")]]))]))

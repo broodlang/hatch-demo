@@ -66,7 +66,7 @@
     [:p {:class "opacity-60 mb-4"} "No uploads yet — be the first!"]
     [:div
       {:class "space-y-2 mb-6"}
-      (map (fn (u) (upload-row conn u)) uploads)]))
+      (map uploads (fn (u) (upload-row conn u)))]))
 
 (defn upload-row (conn u)
   [:div

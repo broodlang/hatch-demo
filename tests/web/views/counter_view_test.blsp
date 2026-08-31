@@ -27,8 +27,7 @@
       (assert= (includes? html "card") true)
       (assert= (includes? html "btn btn-primary") true)))
   (test "a negative count renders the error color class"
-    (assert= (includes? (live-render (counter/live-spec) {:count -1 :fast 0 :slow 0})
-               "text-error")
+    (assert= (includes? (live-render (counter/live-spec) {:count -1 :fast 0 :slow 0}) "text-error")
       true)))
 
 (describe "counter live view (inline) renders the same UI"

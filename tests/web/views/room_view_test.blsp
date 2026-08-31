@@ -21,7 +21,7 @@
       (assert= (get m :waves) 1)
       (assert= (first (get m :events)) "a waved")))
   (test "the activity log caps at 8 entries"
-    (let (m (fold (fn (acc i) (room/record acc (str "w" i))) (room/init) (range 12)))
+    (let (m (fold (range 12) (room/init) (fn (acc i) (room/record acc (str "w" i)))))
       (assert= (count (get m :events)) 8))))
 
 (describe "room live view"

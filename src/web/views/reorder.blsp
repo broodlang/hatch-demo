@@ -56,20 +56,20 @@
       [:button {:data-event "rotate" :class "btn btn-sm"} "Rotate now"]
       [:div
         {:class "space-y-2"}
-        (map (fn (it)
-               [:div
-                 {:data-key (get it :id)
-                  :class (str "flex items-center gap-3 card p-3 "
-                           (if (= (get it :id) (get model :highlight))
-                             "bg-primary text-primary-content"
-                             "bg-base-200"))}
-                 [:span {:class "badge badge-primary w-20"} (get it :name)]
-                 [:input
-                   {:placeholder "type here — keep focus through a reorder…"
-                    :class "input input-bordered input-sm flex-1"}]
-                 [:a
-                   {:href (str "/reorder?highlight=" (get it :id))
-                    :data-patch true
-                    :class "btn btn-xs"}
-                   "Highlight"]])
-          (get model :items))]]))
+        (map (get model :items)
+          (fn (it)
+            [:div
+              {:data-key (get it :id)
+               :class (str "flex items-center gap-3 card p-3 "
+                        (if (= (get it :id) (get model :highlight))
+                          "bg-primary text-primary-content"
+                          "bg-base-200"))}
+              [:span {:class "badge badge-primary w-20"} (get it :name)]
+              [:input
+                {:placeholder "type here — keep focus through a reorder…"
+                 :class "input input-bordered input-sm flex-1"}]
+              [:a
+                {:href (str "/reorder?highlight=" (get it :id))
+                 :data-patch true
+                 :class "btn btn-xs"}
+                "Highlight"]]))]]))
