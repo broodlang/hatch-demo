@@ -107,7 +107,7 @@
 
 (defn port ()
   "This endpoint's port: $HATCH_PORT if set (and numeric), else 5000."
-  (or (string/->number (or (os/env "HATCH_PORT") "")) 5000))
+  (let (n (string/->number (or (os/env "HATCH_PORT") ""))) (if (failure? n) 5000 n)))
 
 (defn dev? ()
   "True unless $HATCH_ENV names a non-dev environment — so dev is the zero-config
