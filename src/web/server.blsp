@@ -1,0 +1,137 @@
+(defmodule web/server
+  "The endpoint — the boundary between the web server and the app, à la Phoenix's Endpoint.
+
+  Almost all of it is `web/endpoint/serve`'s now: the per-request task and its deadline, the
+  crashed handler's log line, the ETag before the compression, the baseline security headers,
+  the themed error page. This module is what is left, and it is worth reading as a list of the
+  things an app still decides for itself:
+
+  - the ROUTER it hands over, which is a composition point — this one wraps the app's routes
+    in per-request logging and serves static assets ahead of them (Phoenix's Plug.Static
+    shape);
+  - what an error page looks like (`web/layout/error-page`);
+  - how the CSS is built (`*assets*`);
+  - TLS, and the body-spooling threshold."
+  (:alias web/endpoint)
+  ; routes/app-router (its (live …) clauses register views)
+  (:alias web/routes)
+  ; live/client-js-handler — the live client, served straight from the hatch package
+  (:alias web/live)
+  ; static/serve — app assets under ./static
+  (:alias web/static)
+  ; conn/assign — stash the request id so handlers can log with it
+  (:alias web/conn)
+  ; req-log/open, req-log/close — per-request structured logging
+  (:alias web/req-log)
+  ; error-page — the error render, in this app's shell
+  (:alias web/layout)
+  ; text — an env read that treats a blank value as unset
+  (:alias web/env))
+
+; Asset pipeline (build-step-agnostic — see hatch's web/assets). We use the Tailwind v4
+; standalone CLI + daisyUI, no npm; `bin/setup` installs them. In dev `web/endpoint/serve`
+; starts `tailwindcss --watch` (a rebuild hot-swaps the page's CSS over the live socket — no
+; reload); in prod it content-fingerprints the already-built file. To switch tools (esbuild,
+; sass, …), edit these argv lists — nothing else here changes.
+(def *assets*
+  {:watchers [{:cmd ["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--watch"]
+               :reload-on "Done in"}]
+   :build [["bin/tailwindcss" "-i" "assets/app.css" "-o" "static/app.css" "--minify"]]
+   ; Content-fingerprint app.css → app.<sha>.css + a cache-manifest (web/assets/fingerprint).
+   ; The layout links it via static/asset-path, so prod serves the fingerprinted, immutable,
+   ; cache-forever URL; dev skips this and serves the plain path. The step also writes a
+   ; precompressed sibling, which web/static negotiates on Accept-Encoding — ~5-6x smaller
+   ; over the wire, with Vary: Accept-Encoding so shared caches key the two apart.
+   :fingerprint {:dir "static" :files ["app.css"]}
+   ; First-run setup, so `nest run` in dev needs no manual `bin/setup`: assets/ensure runs
+   ; :install when :install-probe (the bundler binary) is missing, then a one-shot :build,
+   ; then the watcher. bin/setup downloads the Tailwind standalone CLI + daisyUI (network,
+   ; one time).
+   :install [["bin/setup"]]
+   :install-probe "bin/tailwindcss"})
+
+;; ---- the router this endpoint hands over ------------------------------------
+
+; Static serving runs before the router (Phoenix's Plug.Static shape): the framework's
+; live-view client straight from the hatch package, and the app's own assets under ./static.
+; Built once and reused.
+(def serve-client-js (web/live/client-js-handler))
+
+(defn static-response (conn)
+  "A response conn for a static request — the live-view client, or an app asset under
+  /static — or nil when `conn` isn't static, so the caller falls through to the router."
+  (let (path (get conn :path))
+    (cond
+      (= path "/static/brood_live.js") (serve-client-js conn)
+      (string/starts-with? path "/static/")
+        (web/static/serve conn "static" (string/substring path 8 (string/length path)))
+      else nil)))
+
+(defn logged-router (conn)
+  "The app's routes, with static assets ahead of them and each request logged through
+  `web/req-log`.
+
+  A `:router` is any conn-to-conn function, which makes it the place to compose whatever an
+  app wants around its routes. Here that is a short random request-id — stashed as
+  `:request-id` so a handler's own log lines can carry it, and the thing to grep to follow
+  one request — plus req-log's watchdog, which surfaces a request that overruns its soft
+  deadline at `:warn` instead of letting it hide.
+
+  Only the SUCCESS path is logged here, deliberately. A handler that raises or outruns the
+  endpoint's deadline never returns through this function, and the endpoint already logs
+  both at `:error` with the method, the path and the status — which is the one thing an
+  app-level adapter reliably used to drop."
+  (let (rid (rand/token 4)
+        tagged (web/conn/assign conn :request-id rid)
+        start (os/now-ns))
+    (web/req-log/open rid (get conn :method) (get conn :path))
+    (let (out (or (static-response tagged) (web/routes/app-router tagged))
+          elapsed (math/round-to (/ (- (os/now-ns) start) 1000000.0) 2))
+      (web/req-log/close rid (or (get out :status) 200) elapsed)
+      out)))
+
+;; ---- app-level configuration ------------------------------------------------
+
+(defn combine-logs? ()
+  "Whether req-log folds each request into one line: false when `$LOG_COMBINE` is
+  \"separate\" (an `in` line on arrival + an `out` line on completion), else true."
+  (not (= (web/env/text "LOG_COMBINE") "separate")))
+
+(defn tls-config ()
+  "The server's TLS config — `{:cert <pem> :key <pem>}` to serve HTTPS, or nil (plaintext).
+
+  Precedence: explicit PEM files in `$TLS_CERT_FILE`/`$TLS_KEY_FILE` (production); else, in
+  dev with `$HATCH_TLS` set, a generated self-signed localhost cert (zero-config dev HTTPS);
+  else plaintext. So dev stays plain HTTP by default — opt into dev TLS with HATCH_TLS=1."
+  (let (cert-file (web/env/text "TLS_CERT_FILE")
+        key-file (web/env/text "TLS_KEY_FILE"))
+    (cond
+      (and cert-file key-file) {:cert (file/slurp cert-file) :key (file/slurp key-file)}
+      (and (web/env/dev?) (web/env/flag? "HATCH_TLS"))
+        (let ([cert key] (tls/self-signed "localhost"))
+          {:cert cert :key key})
+      else nil)))
+
+(defn config ()
+  "The endpoint config. A function rather than a `def` because `tls-config` reads the
+  environment and may generate a certificate — work that belongs at boot, not at load."
+  {:router logged-router
+   :assets *assets*
+   ;; hatch supplies the wording per status and decides which responses to skin; this app
+   ;; supplies only the page. The two statuses below are the ones it words differently.
+   :errors {:render web/layout/error-page
+            :meta {418 ["Error" "Something went wrong while handling your request."]
+                   503 ["Service unavailable"
+                         "The service is temporarily unavailable — please try again shortly."]}}
+   ;; :spool-threshold — a request body past this size streams straight to a temp file
+   ;; (:spool-dir) instead of buffering in memory; web/views/uploads handles both paths.
+   ;; 200KB is small enough that a real browser upload of more than a tiny icon exercises
+   ;; the spooled path, while the demo's own fixtures stay comfortably under it.
+   :server {:tls (tls-config) :spool-threshold 200000 :spool-dir "/tmp"}})
+
+(defn serve ()
+  "Start the web server: HTTP requests are bridged through `logged-router`, WebSocket
+  upgrades go to the live-view dispatcher, and the asset pipeline is prepared for this
+  environment (watched in dev, fingerprinted in prod). Returns the listener supervisor pid."
+  (web/req-log/start-req-log {:combine? (combine-logs?)})
+  (web/endpoint/serve (config)))

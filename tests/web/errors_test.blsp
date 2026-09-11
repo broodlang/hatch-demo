@@ -1,39 +1,70 @@
-;; Unit tests for web/errors — the overridable error pages. `error-response` builds a
-;; standalone page (endpoint-raised 500/504); `themed` re-skins an upstream response while
-;; preserving its headers (so 401 challenges / redirect Locations survive) and leaves
-;; non-error responses untouched.
+;; The app's error pages.
+;;
+;; The PIPELINE is hatch's (`web/errors`): which responses to skin, which to leave alone (a
+;; JSON body, a page a handler rendered under its own status), and the default wording per
+;; status — with hatch's own suite pinning all of it. What is left for an app, and what these
+;; tests cover, is the page itself and the two statuses this one words differently.
 (defmodule web-errors-test
-  (:use web/errors :only [error-meta error-response themed])
-  (:use test))
+  (:use test)
+  (:alias web/errors)
+  (:alias web/server)
+  (:alias web/layout))
 
-(describe "web/errors — which codes are error pages"
-  (test "known codes get a specific title"
-    (is (= (first (error-meta 404)) "Page not found"))
-    (is (= (first (error-meta 500)) "Something went wrong")))
-  (test "other 4xx/5xx fall back to a generic page"
-    (is (= (error-meta 418) ["Error" "Something went wrong while handling your request."])))
-  (test "2xx/3xx are not error pages (nil)"
-    (is (= (error-meta 200) nil))
-    (is (= (error-meta 302) nil))))
+(defn- opts () (get (web/server/config) :errors))
 
-(describe "web/errors — error-response (standalone)"
-  (test "themes a known error code into a full HTML response"
-    (let (r (error-response 500))
-      (is (= (get r :status) 500))
-      (is (= (get (get r :headers) :content-type) "text/html; charset=utf-8"))
-      (is (includes? (get r :body) "500"))))
-  (test "returns nil for a non-error code, so callers can fall back"
-    (is (= (error-response 200) nil))))
+(defn- themed (resp) (web/errors/themed resp (opts)))
 
-(describe "web/errors — themed (re-skin upstream, keep headers)"
-  (test "a 404 response keeps its status but gets the themed body"
-    (let (r (themed {:status 404 :headers {} :body "<h1>404 Not Found</h1>"}))
-      (is (= (get r :status) 404))
-      (is (includes? (get r :body) "Page not found"))))
-  (test "a 401 keeps its WWW-Authenticate header (the auth challenge survives)"
-    (let (r (themed {:status 401 :headers {:www-authenticate "Basic realm=x"} :body "nope"}))
-      (is (= (get (get r :headers) :www-authenticate) "Basic realm=x"))
-      (is (= (get (get r :headers) :content-type) "text/html; charset=utf-8"))))
+(describe "error-page renders into the app's shell"
+  (test "a full document, so the skin never re-skins its own output"
+    (is (string/starts-with? (web/layout/error-page 404 "Page not found" "Gone.") "<!DOCTYPE html>")))
+  (test "it carries the status, the title and the blurb"
+    (let (page (web/layout/error-page 500 "Something went wrong" "An unexpected error."))
+      (is (includes? page "500"))
+      (is (includes? page "Something went wrong"))
+      (is (includes? page "An unexpected error."))))
+  (test "and the app's own chrome, which hatch's fallback page has none of"
+    (is (includes? (web/layout/error-page 404 "Page not found" "Gone.") "navbar"))))
+
+(describe "the statuses this app words itself"
+  (test "503 has a message of its own"
+    (is (= (first (web/errors/error-meta 503 (opts))) "Service unavailable")))
+  (test "418 falls back to this app's generic wording"
+    (is (= (web/errors/error-meta 418 (opts))
+          ["Error" "Something went wrong while handling your request."])))
+  (test "everything else keeps hatch's default"
+    (is (= (first (web/errors/error-meta 404 (opts))) "Page not found"))
+    (is (= (first (web/errors/error-meta 500 (opts))) "Something went wrong")))
+  (test "2xx/3xx are not error pages"
+    (is (= (web/errors/error-meta 200 (opts)) nil))
+    (is (= (web/errors/error-meta 302 (opts)) nil))))
+
+(describe "error-response, for an error the endpoint raises itself"
+  (test "a full HTML response at the given status"
+    (let (resp (web/errors/error-response 500 (opts)))
+      (is (= (get resp :status) 500))
+      (is (= (get (get resp :headers) :content-type) "text/html; charset=utf-8"))
+      (is (includes? (get resp :body) "500"))))
+  (test "nil for a non-error status, so a caller can fall back"
+    (is (= (web/errors/error-response 200 (opts)) nil))))
+
+(describe "themed, with this app's options"
+  (test "the router's 404 keeps its status and gains the app's page"
+    (let (resp (themed {:status 404 :headers {} :body "<h1>404 Not Found</h1>"}))
+      (is (= (get resp :status) 404))
+      (is (includes? (get resp :body) "Page not found"))
+      (is (includes? (get resp :body) "navbar"))))
+  (test "a 401 keeps its WWW-Authenticate header, so the browser still prompts"
+    (let (resp (themed {:status 401 :headers {:www-authenticate "Basic realm=x"} :body "nope"}))
+      (is (= (get (get resp :headers) :www-authenticate) "Basic realm=x"))
+      (is (= (get (get resp :headers) :content-type) "text/html; charset=utf-8"))))
   (test "a 200 passes through completely unchanged"
     (let (resp {:status 200 :headers {:content-type "image/png"} :body "binary"})
+      (is (= (themed resp) resp))))
+  (test "a JSON error body survives — this app's own skin used to clobber it"
+    ;; The guard that came with moving the pipeline into hatch: the version this app carried
+    ;; had no content-type check, so an API error became an HTML document and the client's
+    ;; decoder reported a syntax error instead of the message.
+    (let (resp {:status 422
+                :headers {:content-type "application/json"}
+                :body "{\"error\":\"name is required\"}"})
       (is (= (themed resp) resp)))))

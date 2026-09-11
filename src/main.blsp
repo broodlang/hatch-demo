@@ -1,6 +1,6 @@
 (defmodule main
   "Entry point for hatch-demo."
-  (:use web/endpoint :only [serve])
+  (:use web/server :only [serve])
   (:use web/application :only [start default-logger-opts])
   (:alias db)
   (:alias pg))
@@ -12,5 +12,7 @@
      ; turn hatch's [:hatch :upload :progress] telemetry into pubsub broadcasts,
      ; so /upload-progress's live bar hears how far a body has been read
      :upload-progress true
+     ; per-route counts and latency percentiles, served by web/dashboard
+     :metrics true
      :children [(fn () (db/start (pg/opts-from-env "hatch_demo")))
                  (fn () (serve))]}))

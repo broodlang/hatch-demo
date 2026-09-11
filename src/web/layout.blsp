@@ -93,3 +93,18 @@
       {:class "min-h-screen bg-base-100 text-base-content"}
       (raw *nav-html*)
       [:main {:class "max-w-3xl mx-auto p-6"} children]]])
+
+;; The error page. hatch's `web/errors` owns the pipeline — which responses to skin, which to
+;; leave alone (a JSON body, a page a handler rendered itself), and the wording per status —
+;; and calls this to put the page in the app's own shell. `web/server` wires it as the
+;; endpoint's `:errors` `:render`.
+(defn error-page (code title blurb)
+  "An error page in the shared layout, so a 404 or a 500 looks like the rest of the app.
+  Given the resolved `title` and `blurb`, so this carries no copy of the status table."
+  (html (layout (str code " — " title)
+          [:div
+            {:class "text-center py-16"}
+            [:h1 {:class "text-7xl font-bold text-primary"} (str code)]
+            [:p {:class "text-2xl mt-4 mb-2"} title]
+            [:p {:class "opacity-70 mb-8"} blurb]
+            [:a {:href "/" :class "btn btn-primary"} "Back home"]])))
