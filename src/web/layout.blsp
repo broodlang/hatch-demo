@@ -77,6 +77,24 @@
 ; tree per request. Reloading this module (dev hot-reload) recomputes it.
 (def *nav-html* (render (nav-bar)))
 
+;; A hatching egg, two ways from one source. The `<link rel=icon>` in the head takes the
+;; data URL — no second request, and nothing to forget at deploy time — while
+;; `web/views/home/favicon` serves the same markup at /favicon.ico for the clients that ask
+;; without reading the page.
+(def *favicon-svg*
+  (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">"
+    "<text y=\"26\" font-size=\"26\">🥚</text>" "</svg>"))
+
+(def *favicon*
+  ;; Percent-encoded rather than base64: a data URL only has to escape the handful of
+  ;; characters that would end the attribute or the URL, and the result stays readable.
+  (str "data:image/svg+xml,"
+    (-> *favicon-svg*
+      (string/replace "\"" "'")
+      (string/replace "<" "%3C")
+      (string/replace ">" "%3E")
+      (string/replace "#" "%23"))))
+
 (defn layout (title & children)
   "The shared page shell: daisyUI navbar on top, page content in a centered <main>. The
   navbar is the pre-rendered `*nav-html*` (it never varies); only `title` and `children`
@@ -87,7 +105,18 @@
       {}
       [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+      ;; Both of these are here because hatch's own dev audit (web/audit) asked for them,
+      ;; and a demo that ignores the framework's warnings is not much of a demo.
+      ;;
+      ;; `color-scheme` goes BEFORE the stylesheet: the sheet is render-blocking, and until
+      ;; it arrives the browser paints its own default background — a flash on every
+      ;; navigation. Declaring the scheme up front lets it paint the right ground first.
+      [:meta {:name "color-scheme" :content "light dark"}]
       [:title {} title]
+      ;; An inline SVG data URL rather than a served file: no second request, and nothing to
+      ;; forget to deploy. Browsers that ask for /favicon.ico regardless get the same egg
+      ;; from the route in web/routes.
+      [:link {:rel "icon" :href *favicon*}]
       (stylesheet (static/asset-path "app.css"))]
     [:body
       {:class "min-h-screen bg-base-100 text-base-content"}

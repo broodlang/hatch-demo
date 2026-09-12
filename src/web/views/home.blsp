@@ -4,6 +4,10 @@
   action."
   ; page — render a Hiccup document to a response
   (:use web/page)
+  ; put-resp-header / send-resp — the favicon response is built by hand (no Hiccup)
+  (:use web/conn)
+  ; public-for — the icon never changes, so it should not be re-asked for on every visit
+  (:alias web/cache)
   (:use web/layout))
 (defn index (conn)
   "GET / — the landing page: four examples across the page/live × inline/template matrix."
@@ -45,3 +49,13 @@
       [:p
         {:class "mt-6 text-sm opacity-60"}
         "2a and 2b render identical UI — inline Hiccup vs the .bml that lowers to it."])))
+
+;; The icon the layout also carries inline, served for the clients that ask for
+;; /favicon.ico without reading the markup. `web/cache/public-for` because it never changes
+;; and there is no reason for a browser to re-ask on every visit.
+(defn favicon (conn)
+  "GET /favicon.ico — the site icon as an SVG, cached for a day."
+  (-> conn
+    (put-resp-header :content-type "image/svg+xml")
+    (put-resp-header :cache-control (cache/public-for 86400))
+    (send-resp 200 *favicon-svg*)))

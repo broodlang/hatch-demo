@@ -35,3 +35,29 @@
 (describe "router fallback"
   (test "an unknown path is a 404"
     (assert= (status (request app-router "GET" "/no-such-page")) 404)))
+
+;; hatch's own dev audit (web/audit) warns about both of these, and it warned about this
+;; demo until they were added — a showcase app that ignores the framework's warnings is
+;; teaching the wrong thing. Pinned here so they cannot quietly regress.
+(describe "the page shell answers hatch's own audits"
+  (test "declares a color-scheme, and does so BEFORE the render-blocking stylesheet"
+    (let (document (body (request app-router "GET" "/"))
+          scheme (index-of document "name=\"color-scheme\"")
+          sheet (index-of document "rel=\"stylesheet\""))
+      (is (> scheme -1))
+      (is (> sheet -1))
+      ;; order is the whole point: after the sheet, the browser has already painted
+      (is (< scheme sheet))))
+
+  (test "names an icon, so no visit falls back to a bare /favicon.ico probe"
+    (assert= (body-contains? (request app-router "GET" "/") "rel=\"icon\"") true)))
+
+(describe "GET /favicon.ico"
+  (test "serves the icon for clients that never read the markup"
+    (let (resp (request app-router "GET" "/favicon.ico"))
+      (assert= (status resp) 200)
+      (assert= (resp-header resp :content-type) "image/svg+xml")
+      (assert= (body-contains? resp "<svg") true)))
+  (test "is cacheable — it never changes"
+    (is (includes? (resp-header (request app-router "GET" "/favicon.ico") :cache-control)
+          "max-age="))))

@@ -19,7 +19,8 @@
   (:alias web/live)
   ; static/serve — app assets under ./static
   (:alias web/static)
-  ; conn/assign — stash the request id so handlers can log with it
+  ; conn/assign — stash the request id so handlers can log with it; conn-path / conn-method /
+  ; conn-status — read a conn through its accessors, so a mistyped field is a checker error
   (:alias web/conn)
   ; req-log/open, req-log/close — per-request structured logging
   (:alias web/req-log)
@@ -60,7 +61,7 @@
 (defn static-response (conn)
   "A response conn for a static request — the live-view client, or an app asset under
   /static — or nil when `conn` isn't static, so the caller falls through to the router."
-  (let (path (get conn :path))
+  (let (path (web/conn/conn-path conn))
     (cond
       (= path "/static/brood_live.js") (serve-client-js conn)
       (string/starts-with? path "/static/")
@@ -84,10 +85,10 @@
   (let (rid (rand/token 4)
         tagged (web/conn/assign conn :request-id rid)
         start (os/now-ns))
-    (web/req-log/open rid (get conn :method) (get conn :path))
+    (web/req-log/open rid (web/conn/conn-method conn) (web/conn/conn-path conn))
     (let (out (or (static-response tagged) (web/routes/app-router tagged))
           elapsed (math/round-to (/ (- (os/now-ns) start) 1000000.0) 2))
-      (web/req-log/close rid (or (get out :status) 200) elapsed)
+      (web/req-log/close rid (or (web/conn/conn-status out) 200) elapsed)
       out)))
 
 ;; ---- app-level configuration ------------------------------------------------

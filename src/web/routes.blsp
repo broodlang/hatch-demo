@@ -33,6 +33,10 @@
   ; never double-compressed.
   (through [(compress/compress)]
     (get "/" web/views/home/index)
+    ; Browsers ask for this whether or not the markup names an icon, and an unanswered ask
+    ; is a 404 per visit in the log. The layout's <link rel=icon> carries the same egg
+    ; inline, so this is only for the clients that never read the markup.
+    (get "/favicon.ico" web/views/home/favicon)
     ; A `through` pipeline at the *top level* — outside any live-session. Every route
     ; inside runs through the listed plugs first; basic-auth halts with a 401 challenge
     ; until the browser sends admin:admin, so /dev is gated without the handler knowing
@@ -44,7 +48,8 @@
     ; protection. fetch-session loads/writes the signed cookie, fetch-flash does the one-shot
     ; read, and protect-from-forgery mints a token (embedded in the form via csrf/csrf-input)
     ; and rejects a POST whose token doesn't match. `save` does POST→redirect→GET.
-    (through [(session/fetch-session session-secret) session/fetch-flash csrf/protect-from-forgery]
+    (through [(session/fetch-session (session/cookie-store session-secret {}))
+               session/fetch-flash csrf/protect-from-forgery]
       (get "/account" web/views/account/index)
       (post "/account" web/views/account/save)
       ; Postgres-backed message board: GET lists + shows form, POST inserts + redirects.
