@@ -13,8 +13,12 @@
   (:alias web/session)
   ; protect-from-forgery — CSRF check for the /account POST
   (:alias web/csrf)
-  ; compress — gzip/brotli every dynamic response body (static assets self-negotiate in web/endpoint)
-  (:alias web/compress))
+  ; compress — gzip/brotli every dynamic response body (the static routes sit outside it)
+  (:alias web/compress)
+  ; static/handler — the path-safe splat handler for ./static
+  (:alias web/static)
+  ; live/client-js-handler — hatch's bundled live client, served from the package
+  (:alias web/live))
 ; The view modules whose handlers the route table names below are referenced by their
 ; qualified `web/views/…/handler` names in the router, which auto-loads each module
 ; (including the new `web/views/upload-progress`).
@@ -23,14 +27,23 @@
 ; fallback — anyone with it can forge sessions.
 (def session-secret
   (or (os/env "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
-; Static assets (the live-view client + ./static) are served by web/endpoint, before
-; the router — so this file is purely the app's routes; handlers live under web/views.
-
 (defrouter app-router
-  ; Compress every dynamic response (brotli/gzip, negotiated via Accept-Encoding). A
-  ; top-level `through` wraps all routes below; static assets are served in web/endpoint
-  ; before the router, so they keep their own precompressed-`.gz` negotiation and are
-  ; never double-compressed.
+  ;; Static assets first, and deliberately OUTSIDE the compress group below.
+  ;;
+  ;; `web/static` negotiates its own content coding: it serves the precompressed `.gz`/`.br`
+  ;; sibling that `web/assets/fingerprint` wrote, already carrying `Content-Encoding`. The
+  ;; compress plug skips a response that already has one, so routing static through it would
+  ;; not actually double-compress — but relying on that guard is not the same as saying what
+  ;; we mean, and the guard is in the framework rather than here.
+  ;;
+  ;; A splat route plus `static/handler` is the whole of it — the `*path` capture is
+  ;; sanitized against `..` traversal and resolved under ./static. The live client's exact
+  ;; route is declared first because `dispatch` takes the FIRST match.
+  (get "/static/brood_live.js" (web/live/client-js-handler))
+  (get "/static/*path" (web/static/handler "static"))
+
+  ; Compress every dynamic response (brotli/gzip, negotiated via Accept-Encoding). This
+  ; `through` wraps the app's routes; the two static routes above sit outside it.
   (through [(compress/compress)]
     (get "/" web/views/home/index)
     ; Browsers ask for this whether or not the markup names an icon, and an unanswered ask

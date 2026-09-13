@@ -1,0 +1,31 @@
+;; The static routes, which moved into the router (they used to be a hand-rolled path
+;; dispatch in web/server, with a literal 8 standing in for the length of "/static/").
+;; Nothing covered them before the move, which is the reason this file exists: the whole
+;; asset surface — the stylesheet the layout links, and hatch's bundled live client — was
+;; served by code no test ever ran.
+(defmodule web-static-test
+  ; request / status / body-contains? / resp-header — from the Hatch dep
+  (:use web/test)
+  ; app-router
+  (:use web/routes)
+  (:use test))
+
+(describe "GET /static/*path"
+  (test "serves an app asset under ./static"
+    (let (resp (request app-router "GET" "/static/app.css"))
+      (assert= (status resp) 200)
+      (assert= (resp-header resp :content-type) "text/css; charset=utf-8")))
+  (test "a miss is a 404, not a crash"
+    (assert= (status (request app-router "GET" "/static/nope.css")) 404))
+  ;; `static/handler` sanitizes the splat capture; the hand-rolled substring never did.
+  (test "a traversal attempt does not escape the root"
+    (assert= (status (request app-router "GET" "/static/../project.blsp")) 404)))
+
+(describe "GET /static/brood_live.js"
+  ;; Declared ahead of the splat route, and `dispatch` takes the first match — so this must
+  ;; reach hatch's bundled client and not fall through to ./static, where it does not exist.
+  (test "serves hatch's bundled live client, not a 404 from ./static"
+    (let (resp (request app-router "GET" "/static/brood_live.js"))
+      (assert= (status resp) 200)
+      (assert= (resp-header resp :content-type) "text/javascript; charset=utf-8")
+      (assert= (body-contains? resp "BroodLive") true))))

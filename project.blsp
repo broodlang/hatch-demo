@@ -1,9 +1,9 @@
 ;; hatch-demo — a demo app built on the Hatch web framework.
 ;;
-;; Pinned to a Hatch COMMIT, not a registry range, because this demo uses APIs added in
-;; 0.16.0 and that release is not published yet. Flip it back the moment it is:
-;;
-;;   [hatch :version "^0.16.0"]
+;; Depends on a PUBLISHED Hatch, deliberately: this demo is also the proof that hatch
+;; installs and loads as a real package from the registry, the way anyone else gets it.
+;; A :git pin here buys nothing the registry does not and retires that test, so keep the
+;; version range.
 ;;
 ;; To develop both side by side (live edits, no re-fetch), swap to a local :path dep:
 ;;
@@ -13,9 +13,7 @@
   :version "0.2.0"
   :brood ">= 0.23.0"
   :dependencies
-    [[hatch
-       :git "https://github.com/broodlang/hatch.git"
-       :ref "83f22d150798b49fd4f5f8c717ee5167bbf1431f"]
+    [[hatch :version "^0.16.1"]
       [store-postgres :version "^0.6.0"]]
   ;; Pull in Hatch's formatter rules (its :format-headers) so `nest format` indents
   ;; deflive / on / tick / mount / render with the signature on the head line.
