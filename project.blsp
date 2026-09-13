@@ -13,7 +13,7 @@
   :version "0.3.4"
   :brood ">= 0.23.0"
   :dependencies
-    [[hatch :version "^0.20.0"]
+    [[hatch :version "^0.21.0"]
       [store-postgres :version "^0.6.0"]]
   ;; Pull in Hatch's formatter rules (its :format-headers) so `nest format` indents
   ;; deflive / on / tick / mount / render with the signature on the head line.
