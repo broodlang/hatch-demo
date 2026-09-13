@@ -62,7 +62,13 @@
   Only the SUCCESS path is logged here, deliberately. A handler that raises or outruns the
   endpoint's deadline never returns through this function, and the endpoint already logs
   both at `:error` with the method, the path and the status — which is the one thing an
-  app-level adapter reliably used to drop."
+  app-level adapter reliably used to drop.
+
+  Static assets do not appear in these lines at all: `:static` answers them before the
+  router, so they never reach this function. That is the right layer for it to happen at —
+  `http/server` emits its `[:hatch :request :stop]` telemetry around EVERY request, so
+  hatch's own access log (`web/logger`) and `web/metrics` still see them, while this
+  app-level pairing log stays about the app's own handlers."
   (let (rid (rand/token 4)
         tagged (web/conn/assign conn :request-id rid)
         start (os/now-ns))
@@ -98,6 +104,11 @@
   "The endpoint config. A function rather than a `def` because `tls-config` reads the
   environment and may generate a certificate — work that belongs at boot, not at load."
   {:router logged-router
+   ;; Serve ./static at /static ahead of the router, and hatch's own brood_live.js straight
+   ;; out of the package — no route, and no vendored copy that can drift from the server
+   ;; half it talks to. Ahead of the router is also what keeps these away from the
+   ;; compressor: web/static picks its own coding and writes its own validator.
+   :static true
    :assets *assets*
    ;; hatch supplies the wording per status and decides which responses to skin; this app
    ;; supplies only the page. The two statuses below are the ones it words differently.

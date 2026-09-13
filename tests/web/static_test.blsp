@@ -1,31 +1,60 @@
-;; The static routes, which moved into the router (they used to be a hand-rolled path
-;; dispatch in web/server, with a literal 8 standing in for the length of "/static/").
-;; Nothing covered them before the move, which is the reason this file exists: the whole
-;; asset surface — the stylesheet the layout links, and hatch's bundled live client — was
-;; served by code no test ever ran.
+;; Static assets are served by `web/endpoint`'s `:static` stage, ahead of the router — so
+;; these go through the endpoint adapter built from this app's REAL config, not through
+;; app-router, which never sees them.
+;;
+;; They used to be a hand-rolled path dispatch in web/server, with a literal 8 standing in
+;; for the length of "/static/". Nothing covered them then: the whole asset surface — the
+;; stylesheet the layout links, and hatch's bundled live client — was served by code no test
+;; ever ran.
 (defmodule web-static-test
-  ; request / status / body-contains? / resp-header — from the Hatch dep
-  (:use web/test)
-  ; app-router
-  (:use web/routes)
-  (:use test))
+  (:use test)
+  (:alias web/endpoint)
+  ; config — the endpoint config this app actually serves with
+  (:alias web/server))
 
-(describe "GET /static/*path"
+(defn- get-static (path)
+  "The response the running endpoint would send for `path`."
+  ((web/endpoint/adapter (web/server/config)) {:method "GET"
+                                               :path path
+                                               :query ""
+                                               :params {}
+                                               :headers {}
+                                               :body ""}))
+
+(describe "the :static stage"
   (test "serves an app asset under ./static"
-    (let (resp (request app-router "GET" "/static/app.css"))
-      (assert= (status resp) 200)
-      (assert= (resp-header resp :content-type) "text/css; charset=utf-8")))
-  (test "a miss is a 404, not a crash"
-    (assert= (status (request app-router "GET" "/static/nope.css")) 404))
-  ;; `static/handler` sanitizes the splat capture; the hand-rolled substring never did.
-  (test "a traversal attempt does not escape the root"
-    (assert= (status (request app-router "GET" "/static/../project.blsp")) 404)))
+    (let (resp (get-static "/static/app.css"))
+      (assert= (get resp :status) 200)
+      (assert= (get (get resp :headers) :content-type) "text/css; charset=utf-8")))
 
-(describe "GET /static/brood_live.js"
-  ;; Declared ahead of the splat route, and `dispatch` takes the first match — so this must
-  ;; reach hatch's bundled client and not fall through to ./static, where it does not exist.
-  (test "serves hatch's bundled live client, not a 404 from ./static"
-    (let (resp (request app-router "GET" "/static/brood_live.js"))
-      (assert= (status resp) 200)
-      (assert= (resp-header resp :content-type) "text/javascript; charset=utf-8")
-      (assert= (body-contains? resp "BroodLive") true))))
+  (test "a miss is a 404, not a crash"
+    (assert= (get (get-static "/static/nope.css") :status) 404))
+
+  ;; hatch's `static/serve` sanitizes the subpath; the hand-rolled substring never did.
+  (test "a traversal attempt does not escape the root"
+    (assert= (get (get-static "/static/../project.blsp") :status) 404))
+
+  (test "serves hatch's bundled live client from the package, with no route for it"
+    (let (resp (get-static "/static/brood_live.js"))
+      (assert= (get resp :status) 200)
+      (assert= (get (get resp :headers) :content-type) "text/javascript; charset=utf-8")
+      (is (includes? (or (get resp :body) "") "BroodLive"))))
+
+  ;; The asset carries its own ETag over the exact bytes it chose, so the endpoint must not
+  ;; re-encode it — that would leave the tag describing a body no longer being sent.
+  (test "a static response keeps its own validator and is not re-compressed"
+    (let (resp ((web/endpoint/adapter (web/server/config)) {:method "GET"
+                                                            :path "/static/app.css"
+                                                            :query ""
+                                                            :params {}
+                                                            :headers {:accept-encoding "gzip, deflate, br"}
+                                                            :body ""}))
+      (is (not (nil? (get (get resp :headers) :etag))))
+      (assert= (get (get resp :headers) :content-encoding) nil)))
+
+  (test "the baseline security headers still reach a static response"
+    (assert= (get (get (get-static "/static/brood_live.js") :headers) :x-content-type-options)
+      "nosniff"))
+
+  (test "a page path is untouched by the stage and reaches the router"
+    (assert= (get (get-static "/") :status) 200)))
