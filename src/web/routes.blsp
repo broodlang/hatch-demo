@@ -91,9 +91,24 @@
       ; on a *different* connection, tied to this session by an upload token.
       (live "/upload-progress" web/views/upload-progress)
       ; on-mount-guard demo: redirects to /account until the session has a saved name.
-      (live "/dashboard" web/views/dashboard))
+      (live "/dashboard" web/views/dashboard)
+      ; web/streams: a feed the server renders and then forgets. Its model never holds the
+      ; rows you can see — the browser does.
+      (live "/feed" web/views/feed)
+      ; web/upload's socket half: bytes up this page's own WebSocket in binary frames, with
+      ; the progress bar an ordinary slot of an ordinary model key.
+      (live "/avatar" web/views/avatar)
+      ; the client's binding vocabulary on one page — hooks, debounce, throttle,
+      ; data-on-<event>, data-js-<event>
+      (live "/bindings" web/views/bindings))
     (live-session "admin"
       (live "/admin/counter" web/views/counter)
       (live "/admin/counter-inline" web/views/counter-inline))
     ; /slow sleeps 2s before responding — exercises web/req-log's slow-request warn.
-    (get "/slow" web/views/diagnostics/slow-page)))
+    (get "/slow" web/views/diagnostics/slow-page)
+    ; A plain page whose socket is a CHANNEL rather than a live view: static HTML, JSON both
+    ; ways, driven by static/chat.js. The channel itself is registered below.
+    (get "/chat" web/views/chat/index))
+  ; Channels are not routes — every one arrives on /channel/ws and names its topic in each
+  ; frame — so this clause only registers the module for the topics it serves.
+  (channel "room:*" web/channels/room))

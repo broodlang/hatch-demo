@@ -1,0 +1,103 @@
+; checked: this module must define mount/render/handle-event
+(defmodule web/views/avatar
+  "Uploads over the live socket — `web/upload`'s `allow` half.
+
+  The other upload demo (`/upload-progress`) posts a real multipart form on a second
+  connection and watches a token for progress. This one sends the bytes up the view's own
+  WebSocket in binary frames, which needs no form, no second connection and no token.
+
+  The design worth noticing is where the upload lives: at a model key, like anything else. The
+  progress bar below is an ordinary slot of `(get model :avatar)`, so `web/parts` works out
+  that a chunk landing dirties that slot and nothing else — one `<progress>` repaints per
+  chunk and the rest of the page is untouched, with no special case anywhere in the renderer."
+  ; deflive
+  (:use web/live)
+  (:alias web/upload :as upload)
+  (:implements LiveModule))
+
+(def *spool-dir* "/tmp/hatch-demo-uploads")
+
+(defn kept (entry)
+  "What the demo keeps of a consumed upload. It reads the spooled file to prove it is really
+  there and really complete, then reports its size — a real app would move it somewhere.
+
+  `entry-client-name` is the browser's string and nothing has sanitised it, so it is stored as
+  DATA and never used to build a path."
+  {:name (upload/entry-client-name entry)
+   :bytes (count (file/slurp-bytes (upload/entry-path entry)))
+   :type (or (upload/entry-content-type entry) "unknown")})
+
+; ---- live view ----
+
+(deflive (mount (params)
+           (do
+             (check-allow :discarded-catch (try (file/mkdir *spool-dir*) (catch _ nil)))
+             {:avatar (upload/allow :avatar
+                        {:accept [".png" ".jpg" ".jpeg" ".gif" ".webp"]
+                         :max-entries 3
+                         :max-file-size 2000000
+                         :dir *spool-dir*})
+              :saved (list)}))
+
+  (render (model)
+    [:div
+      {:class "space-y-4"}
+      [:h1 {:class "text-2xl font-bold"} "Socket upload (web/upload)"]
+      [:p
+        {:class "opacity-70"}
+        "Pick up to three images under 2 MB. The bytes go up this page's own WebSocket in "
+        "binary frames — no form post, no second connection."]
+      [:div
+        {:class "form-control"}
+        (upload/file-input (get model :avatar) {:id "picker" :class "file-input w-full"})]
+      [:ul
+        {:id "entries" :class "space-y-2"}
+        (for (e (upload/entries (get model :avatar)))
+          [:li
+            {:id (str "entry-" (or (upload/entry-ref e) (upload/entry-client-name e)))
+             :class "bg-base-200 rounded-box p-3"}
+            [:div
+              {:class "flex items-center gap-3"}
+              [:span {:class "grow truncate"} (upload/entry-client-name e)]
+              (if (upload/entry-error e)
+                [:span {:class "badge badge-error"} (upload/entry-error e)]
+                [:span
+                  {:class "badge"}
+                  (str (upload/entry-percent e) "%" (if (upload/entry-done? e) " ✓" ""))])
+              ;; Cancelling tells the browser to stop sending as well as dropping the entry —
+              ;; a 2 MB upload abandoned halfway should stop costing bandwidth immediately.
+              (if (upload/entry-ref e)
+                [:button
+                  {:class "btn btn-xs btn-ghost"
+                   :data-event "cancel"
+                   :data-params (str "{\"ref\":\"" (upload/entry-ref e) "\"}")}
+                  "cancel"]
+                "")]
+            (if (upload/entry-error e)
+              ""
+              [:progress
+                {:class "progress progress-primary w-full mt-2"
+                 :value (upload/entry-percent e)
+                 :max 100}])])]
+      [:button
+        {:id "save" :class "btn btn-primary" :data-event "save" :data-disable-with "Saving…"}
+        "Save the finished ones"]
+      [:ul
+        {:id "saved" :class "menu bg-base-200 rounded-box"}
+        (for (s (get model :saved))
+          [:li
+            {}
+            [:a
+              {}
+              [:span {:class "grow"} (get s :name)]
+              [:span {:class "badge badge-sm"} (str (get s :bytes) " bytes")]]])]])
+
+  (on "cancel" (params model) (upload/cancel model :avatar (get params "ref")))
+
+  (on "save"
+    (params model)
+    ;; `consume` runs over every COMPLETED entry, deletes the spool files and hands back
+    ;; `[results model']`. One still uploading is left where it is. There is no
+    ;; `{:ok …}`/`{:postpone …}` contract to remember — `kept` is an ordinary function.
+    (let ([saved next] (upload/consume model :avatar kept))
+      (assoc next :saved (append (get next :saved) saved)))))

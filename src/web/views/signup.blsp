@@ -59,8 +59,7 @@
 
 ; ---- live view ----
 
-(deflive
-  (mount (params) (init))
+(deflive (mount (params) (init))
 
   (render (model)
     [:div
@@ -77,10 +76,12 @@
         (signup-success model)
         (signup-form model))])
 
-  (on "validate" (params model)
+  (on "validate"
+    (params model)
     (set-field model (get params "field" "") (get params "value" "")))
 
-  (on "submit" (params model)
+  (on "submit"
+    (params model)
     (if (form-valid? model)
       (assoc model :submitted? true)
       (assoc model :attempted? true)))

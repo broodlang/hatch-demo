@@ -25,8 +25,7 @@
   "Move the first item to the end — a reorder that shifts every row's position."
   (if (empty? items) items (append (rest items) (list (first items)))))
 
-(deflive
-  (mount (params) (init (get params "highlight" nil)))
+(deflive (mount (params) (init (get params "highlight" nil)))
 
   ; A server-driven reorder every 3s — no click, so it fires while you're typing in a box,
   ; which is exactly when focus preservation matters.

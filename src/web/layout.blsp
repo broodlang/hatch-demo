@@ -59,13 +59,19 @@
         [:li {} (nav-link "/room" "Live room")]
         [:li {} (nav-link "/presence" "Live presence")]
         [:li {} (nav-link "/reorder" "Keyed list")]
-        [:li {} (nav-link "/dashboard" "Dashboard (guarded)")])
+        [:li {} (nav-link "/dashboard" "Dashboard (guarded)")]
+        [:li {} (nav-link "/feed" "Live feed (streams)")]
+        [:li {} (nav-link "/avatar" "Socket upload")]
+        [:li {} (nav-link "/bindings" "Client bindings")])
       (nav-dropdown "Admin"
         [:li {} (nav-link "/admin/counter" "Counter")]
         [:li {} (nav-link "/admin/counter-inline" "Counter (inline)")])
       (nav-dropdown "Pages"
         [:li {} (nav-link "/page-inline" "Page (inline)")]
         [:li {} (nav-link "/page-template" "Page (template)")])
+      ;; /chat is NOT a live view, so no data-nav: its socket is a channel, and live
+      ;; navigation would try to swap it into the live session it does not belong to.
+      [:a {:href "/chat" :class "btn btn-ghost btn-sm"} "Chat"]
       [:a {:href "/messages" :data-nav true :class "btn btn-ghost btn-sm"} "Messages"]
       [:a {:href "/uploads" :data-nav true :class "btn btn-ghost btn-sm"} "Uploads"]
       [:a {:href "/account" :data-nav true :class "btn btn-ghost btn-sm"} "Account"]
@@ -121,7 +127,16 @@
     [:body
       {:class "min-h-screen bg-base-100 text-base-content"}
       (raw *nav-html*)
-      [:main {:class "max-w-3xl mx-auto p-6"} children]]])
+      [:main {:class "max-w-3xl mx-auto p-6"} children]
+      ;; The app's hooks, loaded on every page and before the live client mounts — `defer`
+      ;; scripts run in order, and the router's `(live …)` clause puts brood_live.js in the
+      ;; head. A hook must be registered before the element carrying it is patched in, and a
+      ;; single bundle in the layout is how a real app does that rather than trying to get a
+      ;; script per view into a mount page it does not control.
+      ;;
+      ;; A page with no `[data-hook]` pays one cached request for a file that registers a
+      ;; definition nothing asks for, which is the right trade against wiring it per view.
+      [:script {:src "/static/sparkline.js" :defer true}]]])
 
 ;; The error page. hatch's `web/errors` owns the pipeline — which responses to skin, which to
 ;; leave alone (a JSON body, a page a handler rendered itself), and the wording per status —

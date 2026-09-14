@@ -80,8 +80,7 @@
 
 ;; ---- live view ----
 
-(deflive
-  (mount (params) (init (upload/watch)))
+(deflive (mount (params) (init (upload/watch)))
 
   ; A progress event for this session's token, delivered by web/upload over pubsub.
   ; Anything else arriving on the topic is ignored rather than crashing the session.

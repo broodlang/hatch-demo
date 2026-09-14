@@ -1,0 +1,109 @@
+; checked: this module must define mount/render/handle-event
+(defmodule web/views/feed
+  "A live feed built on `web/streams` — the collection the server renders WITHOUT holding.
+
+  This view's model never contains the feed. `streams/insert` puts a row in a stream, the
+  render draws whatever is pending, the session sends it and then empties the stream. What is
+  on screen lives in the browser; the server keeps the handful of rows it was handed since the
+  last patch and nothing else.
+
+  Watch it in the diagnostics: the ticker adds a row every two seconds, forever, and this
+  session's memory does not grow with them. A feed held in the model would.
+
+  The trade is visible here too, and is the point rather than a wart: `held` is the demo's own
+  counter of how many rows it has EVER sent, kept in the model because the stream cannot answer
+  that question. A handler that needs to know what is on screen wants an ordinary model key —
+  the stream is for the rows themselves."
+  ; deflive
+  (:use web/live)
+  (:alias web/streams :as streams)
+  (:implements LiveModule))
+
+;; A literal, not a named constant: `deflive` keys its tick arms by the interval as written,
+;; and a symbol there BINDS rather than matches (see hatch's own guard on this).
+
+(defn entry (n kind)
+  "One feed row. `:id` is what the browser morphs against and what `delete` names, so it has
+  to be unique for the life of the page."
+  {:id (str "row-" n) :n n :kind kind :at (os/now)})
+
+(defn add (model kind)
+  "Push a row onto the stream and count it. The stream holds it only until the next frame."
+  (let (n (inc (get model :sent)))
+    (assoc model :sent n :feed (streams/prepend (get model :feed) (entry n kind)))))
+
+; ---- live view ----
+
+(deflive
+  (mount (params)
+    ;; Seeded here, and that matters: a reconnect re-runs `mount`, and this is the only thing
+    ;; that can put rows back — the server did not keep them.
+    {:sent 3
+     :paused? false
+     :feed (streams/new :feed
+             [(entry 3 "seed") (entry 2 "seed") (entry 1 "seed")])})
+
+  (render (model)
+    [:div
+      {:class "space-y-4"}
+      [:h1 {:class "text-2xl font-bold"} "Live feed (web/streams)"]
+      [:p
+        {:class "opacity-70"}
+        "Rows are rendered once and forgotten. The server is holding "
+        [:strong {} "none"]
+        " of what you see below — "
+        [:span {:id "sent"} (str (get model :sent))]
+        " rows have been sent in total."]
+      [:div
+        {:class "flex gap-2 items-center"}
+        [:button
+          {:id "add" :class "btn btn-primary btn-sm" :data-event "add"}
+          "Add a row"]
+        ;; A throttled ACTION: clicks inside the window are dropped, not replayed late.
+        [:button
+          {:id "burst"
+           :class "btn btn-sm"
+           :data-event "add"
+           :data-params "{\"kind\":\"burst\"}"
+           :data-throttle "500"}
+          "Add (throttled 500ms)"]
+        [:button
+          {:id "pause" :class "btn btn-sm" :data-event "toggle-pause"}
+          (if (get model :paused?) "Resume ticker" "Pause ticker")]
+        [:button {:id "clear" :class "btn btn-ghost btn-sm" :data-event "clear"} "Clear"]]
+      ;; `streams/container` supplies the id and the `data-update` mode — "stream" normally,
+      ;; "stream-reset" for exactly the render after a `reset`, which empties the browser's
+      ;; copy first. Written by hand it would be one attribute away from an append-only list
+      ;; that never clears.
+      [:ul
+        (streams/container (get model :feed) {:class "menu bg-base-200 rounded-box w-full"})
+        (for (row (streams/items (get model :feed)))
+          [:li
+            (streams/item-attrs row)
+            [:a
+              {}
+              [:span {:class "badge badge-sm"} (get row :kind)]
+              [:span {} (str "row " (get row :n))]
+              [:button
+                {:class "btn btn-xs btn-ghost ml-auto"
+                 :data-event "drop"
+                 :data-params (str "{\"id\":\"" (get row :id) "\"}")}
+                "×"]]])]])
+
+  (on "add" (params model) (add model (get params "kind" "click")))
+
+  (on "drop"
+    (params model)
+    ;; A delete cannot be expressed by rendering what is left — the server does not know what
+    ;; is left — so it travels as an instruction naming the id.
+    (assoc model :feed (streams/delete (get model :feed) (get params "id"))))
+
+  (on "clear"
+    (params model)
+    ;; `reset` with nothing is how you empty the browser's copy: the container renders
+    ;; `stream-reset` for one patch and the client clears before merging.
+    (assoc model :feed (streams/reset (get model :feed))))
+
+  (on "toggle-pause" (params model) (update model :paused? not))
+
+  (tick 2000 (model) (if (get model :paused?) model (add model "tick"))))

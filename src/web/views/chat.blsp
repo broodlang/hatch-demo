@@ -1,0 +1,51 @@
+(defmodule web/views/chat
+  "The page behind the channel demo — and deliberately NOT a live view.
+
+  Everything else here is `deflive`: the server holds the model and pushes markup diffs. This
+  page is static HTML that the server renders once and then has nothing more to do with. Its
+  socket is a `web/channel` one, driven by `static/chat.js`, and what crosses it is JSON.
+
+  That is the whole point of channels being separate. A page that wants a stream of messages
+  rather than a stream of markup does not need a model on the server, does not need a render
+  per event, and does not need the framework to know what its DOM looks like."
+  ; page — the plain (non-live) render helper
+  (:use web/page)
+  (:use web/layout)
+  ; client-script — the channel client, served out of the hatch package
+  (:alias web/channel))
+
+(defn index (conn)
+  "GET /chat — a plain page plus two scripts: hatch's channel client and this page's own."
+  (page conn
+    (layout "Chat (channels)"
+      [:div
+        {:class "space-y-4"}
+        [:h1 {:class "text-2xl font-bold"} "Chat (web/channel)"]
+        [:p
+          {:class "opacity-70"}
+          "Not a live view. This page is static HTML; the messages arrive as JSON on a "
+          "channel socket that this page's own JavaScript drives. Open it in two tabs."]
+        [:div
+          {:class "flex gap-2"}
+          [:input
+            {:id "name" :class "input input-bordered" :placeholder "your name" :value ""}]
+          [:select
+            {:id "topic" :class "select select-bordered"}
+            [:option {:value "room:lobby"} "room:lobby"]
+            [:option {:value "room:dev"} "room:dev"]]
+          [:button {:id "connect" :class "btn btn-primary"} "Join"]
+          [:button {:id "who" :class "btn btn-ghost"} "Who's here?"]]
+        [:div {:id "status" :class "badge"} "not joined"]
+        [:ul {:id "log" :class "menu bg-base-200 rounded-box w-full min-h-48"}]
+        [:form
+          {:id "say-form" :class "flex gap-2"}
+          [:input
+            {:id "body"
+             :class "input input-bordered grow"
+             :placeholder "message"
+             :autocomplete "off"}]
+          [:button {:class "btn"} "Send"]]]
+      ;; Served straight out of the hatch package, like the live client — an app never vendors
+      ;; a copy that can drift from the server half it talks to.
+      (web/channel/client-script)
+      [:script {:src "/static/chat.js" :defer true}])))

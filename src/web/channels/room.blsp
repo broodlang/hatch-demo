@@ -1,0 +1,58 @@
+(defmodule web/channels/room
+  "A topic socket — `web/channel` rather than `web/live`.
+
+  Everything else in this demo is a live view: the socket IS the page, and what crosses it is
+  a diff of rendered markup. This is the other shape. `/chat` is an ordinary static page, and
+  the messages arrive as JSON on a socket the page's own JavaScript drives. Nothing here
+  renders anything.
+
+  It is registered in the router as `(channel \"room:*\" web/channels/room)`, so `room:lobby`
+  and `room:dev` are both served by this one module with their own assigns."
+  ; defchannel
+  (:use web/channel)
+  ; the roster demo below — presence tracks a process, and a channel socket is one
+  (:alias web/presence))
+
+(defn nickname (params)
+  "The name this client asked for, trimmed and bounded. A client chooses it, so it is treated
+  as input rather than as a fact: unbounded here would mean an unbounded string in every
+  roster and every broadcast."
+  (let (raw (string/trim (->string (get params "name" ""))))
+    (cond
+      (string/blank? raw) "anon"
+      (> (string/length raw) 24) (string/substring raw 0 24)
+      else raw)))
+
+(defchannel
+  (join (topic params socket)
+    ;; Assign FIRST, then read — `socket` arrives with empty assigns, so tracking presence off
+    ;; it before this would file every member under nil.
+    (let (joined (assign socket {:name (nickname params) :joined-at (os/now)}))
+      (presence/track topic (assigned joined :name) {:name (assigned joined :name)})
+      (broadcast-from joined "joined" {:name (assigned joined :name)})
+      [:ok {:name (assigned joined :name) :topic topic} joined]))
+
+  (on "say"
+    (params socket)
+    (do
+      ;; `broadcast`, not `broadcast-from`: the sender should see their own message land the
+      ;; same way everyone else does, so there is one code path and no optimistic local echo
+      ;; that can disagree with the server.
+      (broadcast socket
+        "said"
+        {:name (assigned socket :name)
+         :body (string/trim (->string (get params "body" "")))
+         :at (os/now)})
+      [:noreply socket]))
+
+  ;; A request/response over the same socket: the client awaits this one by `ref` while other
+  ;; topics' pushes stream past it.
+  (on "who"
+    (params socket)
+    [:reply
+      {:members (mapv (presence/roster (channel-socket-topic socket))
+                  (fn (e) (get e :key)))}
+      socket])
+
+  (terminate (reason socket)
+    (broadcast-from socket "left" {:name (assigned socket :name) :reason (->string reason)})))

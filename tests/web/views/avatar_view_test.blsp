@@ -1,0 +1,62 @@
+;; The socket-upload view. The whole upload lifecycle is pure functions over a model, so all
+;; of this runs with no socket and no browser — which is the design working, not a shortcut.
+(defmodule web-views-avatar-view-test
+  (:use web/test)
+  (:alias web/views/avatar)
+  (:alias web/upload :as upload)
+  (:use test))
+
+(defn view () (live-open (avatar/live-spec) {}))
+
+(defn offered (model client-name size)
+  "Offer one file to the view's upload and return `[model' ref]`."
+  (let ([next refs] (upload/offer model
+                      :avatar (list {"name" client-name "size" size "type" "image/png"})))
+    [next (first refs)]))
+
+(describe "the picker"
+  (test "names the upload, so the client knows where to send the bytes"
+    (assert= (live-attr (view) "#picker" :data-upload) "avatar"))
+  (test "allows more than one file, so `multiple` is present"
+    (assert= (nil? (live-attr (view) "#picker" :multiple)) false))
+  (test "and carries the accept list the server also enforces"
+    (assert= (includes? (live-attr (view) "#picker" :accept) ".png") true)))
+
+(describe "entries appear as they are offered and progress as bytes land"
+  (test "an accepted file renders with a ref and a progress bar"
+    (let (v (live-apply (view) (fn (m) (first (offered m "cat.png" 4)))))
+      (assert= (live-count v "progress") 1)
+      (assert= (live-has? v "#entries li") true)))
+
+  (test "percent tracks bytes RECEIVED, not the size the browser claimed"
+    (let (v (live-apply (view)
+              (fn (m)
+                (let ([m1 ref] (offered m "cat.png" 4))
+                  (upload/receive-chunk m1 ref (bytes [1 2]))))))
+      (assert= (includes? (live-markup v) "50%") true)))
+
+  (test "a file the accept list refuses shows its reason and gets no progress bar"
+    (let (v (live-apply (view)
+              (fn (m)
+                (first (upload/offer m
+                         :avatar (list {"name" "notes.txt" "size" 4 "type" "text/plain"}))))))
+      (assert= (live-count v "progress") 0)
+      (assert= (includes? (live-markup v) "not accepted") true))))
+
+(describe "saving"
+  (test "consume takes the finished entry, reads its spool file, and lists it"
+    (let (v (live-apply (view)
+              (fn (m)
+                (let ([m1 ref] (offered m "cat.png" 3))
+                  (upload/finish (upload/receive-chunk m1 ref (bytes [1 2 3])) ref))))
+          saved (live-click v "#save"))
+      (assert= (live-has? saved "#saved li") true)
+      (assert= (includes? (live-markup saved) "3 bytes") true)
+      ;; and the entry is gone from the upload — consumed, not left to be saved twice
+      (assert= (live-count saved "#entries li") 0)))
+
+  (test "an entry still uploading is left where it is"
+    (let (v (live-apply (view) (fn (m) (first (offered m "cat.png" 100))))
+          saved (live-click v "#save"))
+      (assert= (live-count saved "#entries li") 1)
+      (assert= (live-count saved "#saved li") 0))))

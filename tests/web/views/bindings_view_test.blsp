@@ -1,0 +1,59 @@
+;; The client-bindings page. What is testable from here is what the SERVER renders and what it
+;; does with an event — that the field says `data-debounce="300"`, and that the handler behind
+;; it works. Whether the browser actually waits 300ms is the client's half, and no test in this
+;; repo can see it (see hatch's docs/client.md on that gap).
+;;
+;; Which is exactly why the attributes are asserted: they are the contract between the two
+;; halves, and a typo in one is invisible from either side alone.
+(defmodule web-views-bindings-view-test
+  (:use web/test)
+  (:alias web/views/bindings)
+  (:use test))
+
+(defn view () (live-open (bindings/live-spec) {}))
+
+(describe "the pacing attributes reach the markup"
+  (test "the search field is debounced rather than firing per keystroke"
+    (assert= (live-attr (view) "#search" :data-debounce) "300"))
+  (test "the slider is throttled — a VALUE, so the client gives it a trailing send"
+    (assert= (live-attr (view) "#level" :data-throttle) "200"))
+  (test "the burst button is throttled — an ACTION, so extras are dropped"
+    (assert= (live-attr (view) "#burst" :data-throttle) "1000")))
+
+(describe "the explicit bindings"
+  (test "keydown is bound by name and filtered to two keys"
+    (assert= (live-attr (view) "#keys" :data-on-keydown) "key")
+    (assert= (live-attr (view) "#keys" :data-keys) "Enter,Escape"))
+  (test "the toggle carries client commands and no server event"
+    (assert= (includes? (live-attr (view) "#toggle" :data-js-click) "toggle") true)
+    (assert= (live-attr (view) "#toggle" :data-event) nil)))
+
+(describe "the hook"
+  (test "is named, identified, and keeps the morph out of its own subtree"
+    (assert= (live-attr (view) "#spark" :data-hook) "Sparkline")
+    (assert= (live-attr (view) "#spark" :data-update) "ignore")
+    ;; the id is not decoration: without it the morph cannot recognise the element across a
+    ;; patch, and the hook is destroyed and re-mounted under a library mid-use
+    (assert= (live-has? (view) "#spark") true))
+  (test "and is handed its data through an attribute, which is what makes `updated` fire"
+    (assert= (includes? (live-attr (view) "#spark" :data-points) "[") true))
+  (test "the ticker moves that data, so the hook has something to react to"
+    (let (before (live-attr (view) "#spark" :data-points)
+          after (live-attr (live-apply (view) (fn (m) (live-tick (bindings/live-spec) 1000 m)))
+                  "#spark" :data-points))
+      (assert= (= before after) false))))
+
+(describe "the handlers behind them"
+  (test "search records the value and counts the round trip"
+    (let (v (live-change (view) "#search" "ada"))
+      (assert= (live-text v "#searches") "1")
+      (assert= (get (live-model v) :query) "ada")))
+  (test "the level handler takes a number"
+    (assert= (live-text (live-change (view) "#level" "80") "#level-out") "80"))
+  ;; `string/->number` answers a FAILURE for junk, and a failure is TRUTHY — so the obvious
+  ;; `(or … 0)` would have accepted this as a level.
+  (test "and refuses junk rather than treating a failure as a value"
+    (assert= (live-text (live-change (view) "#level" "abc") "#level-out") "50"))
+  (test "a filtered keydown is driven by naming its binding"
+    (assert= (live-text (live-fire (view) "#keys" :data-on-keydown {"key" "Enter"}) "#last-key")
+      "Enter")))

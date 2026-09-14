@@ -1,0 +1,60 @@
+;; The streams feed, driven through Hatch's MARKUP harness rather than by naming handlers.
+;; `live-click` reads the event off the button's own `data-event`, so these tests can only
+;; fire what a user could — a button wired to the wrong name fails here rather than passing.
+(defmodule web-views-feed-view-test
+  ; live-open / live-click / live-has? / live-text — from the dep
+  (:use web/test)
+  (:alias web/views/feed)
+  (:alias web/streams :as streams)
+  (:use test))
+
+(defn view () (live-open (feed/live-spec) {}))
+
+(describe "the feed renders what is pending, and only that"
+  (test "mount seeds three rows and the container asks the client to merge"
+    (let (v (view))
+      (assert= (live-count v "li") 3)
+      (assert= (live-attr v "#feed" :data-update) "stream")))
+
+  (test "every row carries an id — without one the merge appends a duplicate per render"
+    (let (v (view))
+      (assert= (live-has? v "li#row-1") true)
+      (assert= (live-has? v "li#row-3") true)))
+
+  ;; The property the whole module exists for: after a render the server is not holding the
+  ;; rows. A click adds one, and the NEXT render carries that one alone.
+  (test "adding a row leaves only the new row pending once the stream is flushed"
+    (let (v (live-click (view) "#add")
+          flushed (live-apply v (fn (model) (streams/flush model))))
+      (assert= (live-count v "li") 4)
+      (assert= (live-count flushed "li") 0))))
+
+(describe "the controls are wired to handlers that exist"
+  (test "add advances the sent counter"
+    (assert= (live-text (live-click (view) "#add") "#sent") "4"))
+  (test "the throttled button is the same handler with a different kind"
+    (let (v (live-click (view) "#burst"))
+      (assert= (live-has? v "li#row-4") true)))
+  (test "pause toggles the label, so the ticker state is visible"
+    (assert= (live-text (live-click (view) "#pause") "#pause") "Resume ticker"))
+  (test "clear empties the browser's copy by asking for a reset"
+    (let (v (live-click (view) "#clear"))
+      (assert= (live-count v "li") 0)
+      (assert= (live-attr v "#feed" :data-update) "stream-reset"))))
+
+(describe "the ticker"
+  (test "adds a row while running"
+    (assert= (live-text (live-apply (view) (fn (m) (live-tick (feed/live-spec) 2000 m))) "#sent")
+      "4"))
+  (test "and does nothing while paused"
+    (let (paused (live-click (view) "#pause"))
+      (assert= (live-text (live-apply paused (fn (m) (live-tick (feed/live-spec) 2000 m))) "#sent")
+        "3"))))
+
+(describe "the demo's own model logic"
+  (test "entry ids are unique per row, which is what the merge keys on"
+    (assert= (get (feed/entry 7 "x") :id) "row-7"))
+  (test "add both counts and enqueues"
+    (let (next (feed/add {:sent 1 :feed (streams/new :feed)} "click"))
+      (assert= (get next :sent) 2)
+      (assert= (count (streams/items (get next :feed))) 1))))

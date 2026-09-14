@@ -36,7 +36,8 @@
   ; own action) and broadcast-froms everyone *else* — the sender is excluded, so this
   ; wave is recorded exactly once locally, not twice (once here, once via the echo a
   ; plain broadcast would also have delivered back to the sender through handle-info).
-  (on "wave" (params model)
+  (on "wave"
+    (params model)
     (do
       (pubsub/broadcast-from topic {:from (get model :id)})
       (record model "You waved 👋")))

@@ -1,0 +1,138 @@
+; checked: this module must define mount/render/handle-event
+(defmodule web/views/bindings
+  "The client's binding vocabulary, on one page — hooks, debounce, throttle,
+  `data-on-<event>`, `data-js-<event>` and `data-target`.
+
+  Each control here exists to make one behaviour visible rather than to be useful. The search
+  field is debounced, so the round-trip counter moves once you stop typing rather than once per
+  keystroke. The slider is throttled, and stops on the value you released it at — a throttled
+  VALUE gets a trailing send, which is the one place hatch deliberately differs from Phoenix,
+  because dropping a slider's last event leaves the server holding a position you never chose.
+  The throttled button next to it does the opposite: presses inside the window are dropped, not
+  replayed, because replaying a click late is a second click.
+
+  The sparkline is a hook — `static/sparkline.js` registers it with `BroodLive.hook`. Its
+  element carries `data-update=\"ignore\"`, so the morph syncs its attributes (which is how the
+  view hands it new points) and leaves its `<svg>` alone. Without that the next patch would
+  morph the drawing back to the empty container the server rendered."
+  ; deflive
+  (:use web/live)
+  (:implements LiveModule))
+
+(defn point (n) (math/floor (+ 20 (* 18 (math/abs (math/sin (/ n 3.0)))))))
+
+(defn points-json (model)
+  "The sparkline's data, as the JSON its hook reads off `data-points`. Attributes are the
+  channel a view uses to hand a hook fresh data, and a change to one is what makes the hook's
+  `updated` fire."
+  (encode (mapv (range 16) (fn (i) (point (+ i (get model :phase)))))))
+
+; ---- live view ----
+
+(deflive (mount (params) {:query "" :searches 0 :level 50 :bursts 0 :phase 0 :last-key ""})
+
+  (render (model)
+    [:div
+      {:class "space-y-6"}
+      [:h1 {:class "text-2xl font-bold"} "Client bindings"]
+
+      ;; ---- debounce ----
+      [:section
+        {:class "space-y-2"}
+        [:h2 {:class "text-lg font-semibold"} "data-debounce"]
+        [:input
+          {:id "search"
+           :type "text"
+           :class "input input-bordered w-full"
+           :placeholder "type — the server hears you once you pause"
+           :data-event "search"
+           :data-debounce "300"}]
+        [:p
+          {:class "opacity-70"}
+          "round trips: "
+          [:span {:id "searches" :class "badge"} (str (get model :searches))]
+          [:span {:class "ml-2"} (str "last: " (pr-str (get model :query)))]]]
+
+      ;; ---- throttle, both kinds ----
+      [:section
+        {:class "space-y-2"}
+        [:h2 {:class "text-lg font-semibold"} "data-throttle"]
+        [:input
+          {:id "level"
+           :type "range"
+           :min "0"
+           :max "100"
+           :class "range"
+           :value (str (get model :level))
+           :data-event "level"
+           :data-throttle "200"}]
+        [:p
+          {:class "opacity-70"}
+          "a VALUE stream gets a trailing send, so this ends on where you let go: "
+          [:span {:id "level-out" :class "badge badge-primary"} (str (get model :level))]]
+        [:button
+          {:id "burst"
+           :class "btn btn-sm"
+           :data-event "burst"
+           :data-throttle "1000"}
+          "an ACTION is dropped, not replayed"]
+        [:span {:id "bursts" :class "badge ml-2"} (str (get model :bursts))]]
+
+      ;; ---- data-on-* ----
+      [:section
+        {:class "space-y-2"}
+        [:h2 {:class "text-lg font-semibold"} "data-on-<event>"]
+        [:input
+          {:id "keys"
+           :type "text"
+           :class "input input-bordered w-full"
+           :placeholder "press Enter or Escape — other keys never leave the browser"
+           :data-on-keydown "key"
+           :data-keys "Enter,Escape"}]
+        [:p {:class "opacity-70"} "last key: " [:span {:id "last-key"} (get model :last-key)]]]
+
+      ;; ---- data-js-* ----
+      [:section
+        {:class "space-y-2"}
+        [:h2 {:class "text-lg font-semibold"} "data-js-<event>"]
+        [:button
+          {:id "toggle" :class "btn btn-sm" :data-js-click (js [[:toggle "#panel"]])}
+          "toggle a panel (no round trip)"]
+        [:div
+          {:id "panel" :class "alert" :hidden true}
+          [:span {} "Opened and closed entirely in the browser — the server never hears it."]]]
+
+      ;; ---- a hook ----
+      [:section
+        {:class "space-y-2"}
+        [:h2 {:class "text-lg font-semibold"} "a hook"]
+        [:div
+          {:id "spark"
+           :class "bg-base-200 rounded-box p-3"
+           :data-hook "Sparkline"
+           :data-update "ignore"
+           :data-points (points-json model)}]
+        [:p
+          {:class "opacity-70"}
+          "drawn by static/sparkline.js. The server changes data-points; the hook's "
+          [:code {} "updated"]
+          " redraws. data-update=\"ignore\" keeps the morph out of its <svg>."]]])
+
+  (on "search"
+    (params model)
+    (assoc model :query (get params "value" "") :searches (inc (get model :searches))))
+
+  (on "level"
+    (params model)
+    ;; `string/->number` answers a FAILURE value for junk, and a failure is TRUTHY — so `or`
+    ;; would accept "abc" as a level. `int?` is the narrow the checker is asking for.
+    (let (parsed (string/->number (get params "value" "0")))
+      (assoc model :level (if (int? parsed) parsed (get model :level)))))
+
+  (on "burst" (params model) (update model :bursts inc))
+
+  (on "key" (params model) (assoc model :last-key (get params "key" "")))
+
+  ;; The sparkline's data moves on its own, so the hook's `updated` has something to react to
+  ;; without anyone touching the page.
+  (tick 1000 (model) (update model :phase inc)))

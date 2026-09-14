@@ -1,0 +1,124 @@
+;; The room channel. Its callbacks are ordinary functions of a socket, so most of this runs
+;; without a connection — `defchannel` defines `join`/`handle-in`/`terminate` into the module
+;; and a test calls them directly.
+;;
+;; What that cannot show is the routing: that a frame naming this topic reaches THIS module,
+;; that a reply comes back on the ref the client sent, and that a broadcast from elsewhere
+;; arrives. The last describe drives a real socket over loopback for those.
+(defmodule web-channels-room-test
+  (:use web/channel)
+  (:alias web/channels/room)
+  (:alias web/pubsub)
+  (:use test))
+
+(defn socket-for (topic) (new-socket topic nil))
+
+(describe "nickname is treated as input, not as a fact"
+  (test "a blank or missing name falls back rather than tracking an empty string"
+    (assert= (room/nickname {}) "anon")
+    (assert= (room/nickname {"name" "   "}) "anon"))
+  (test "it is trimmed"
+    (assert= (room/nickname {"name" "  ada  "}) "ada"))
+  ;; A client chooses this, and it ends up in every roster and every broadcast — unbounded
+  ;; here would mean an unbounded string in all of them.
+  (test "and bounded, because the client chooses it"
+    (assert= (string/length (room/nickname {"name" (string/repeat "x" 200)})) 24)))
+
+(describe "join"
+  (test "accepts, and answers the name it settled on"
+    (match (room/join "room:lobby" {"name" "grace"} (socket-for "room:lobby"))
+      ([:ok payload socket] (do
+                              (assert= (get payload :name) "grace")
+                              (assert= (get payload :topic) "room:lobby")
+                              (assert= (assigned socket :name) "grace")))
+      (o (assert= o :ok))))
+  ;; The socket arrives with empty assigns, so anything read off it before `assign` is nil —
+  ;; which would have filed every member of the roster under nothing.
+  (test "assigns the name BEFORE anything reads it"
+    (match (room/join "room:lobby" {} (socket-for "room:lobby"))
+      ([:ok _payload socket] (assert= (assigned socket :name) "anon"))
+      (o (assert= o :ok)))))
+
+(describe "handle-in"
+  (test "`who` replies with the roster rather than pushing it"
+    (match (room/handle-in "who" {} (socket-for "room:empty"))
+      ([:reply payload _] (assert= (nil? (get payload :members)) false))
+      (o (assert= o :reply))))
+  (test "an unrecognised event is a no-op, not an error"
+    (let (s (socket-for "room:lobby"))
+      (assert= (room/handle-in "nonsense" {} s) [:noreply s]))))
+
+;; ---- over a real socket -----------------------------------------------------
+
+(defn masked-text-frame (s)
+  (let (b (string/->bytes s))
+    (if (<= (count b) 125)
+      (bytes/concat [129 (+ 128 (count b)) 0 0 0 0 b])
+      (bytes/concat [129 (+ 128 126) (bytes/int-> (count b) 2) 0 0 0 0 b]))))
+
+(defn frame-payload (buf)
+  (if (< (count buf) 2)
+    [:incomplete]
+    (let (len7 (bytes/at buf 1)
+          header (if (= len7 126) 4 2)
+          len (if (= len7 126) (+ (* 256 (bytes/at buf 2)) (bytes/at buf 3)) len7))
+      (if (< (count buf) (+ header len))
+        [:incomplete]
+        [:ok
+          (string/bytes-> (bytes/slice buf header (+ header len)))
+          (bytes/slice buf (+ header len) (count buf))]))))
+
+(defn read-frame (sock buf)
+  (match (frame-payload buf)
+    ([:ok text remainder] [text remainder])
+    ([:incomplete] (receive
+                     ([:tcp ^sock chunk] (read-frame sock (bytes/concat buf chunk)))
+                     ([:tcp-closed ^sock] [:closed (bytes [])])
+                     (after 10000 [:timeout (bytes [])])))))
+
+(defn expect-frame (sock buf)
+  (let (result (read-frame sock buf))
+    (when (or (= (first result) :timeout) (= (first result) :closed))
+      (error "test: no frame from the channel socket (" (->string (first result)) ")"))
+    result))
+
+(defn with-socket (body)
+  (let (ls (tcp/listen "127.0.0.1" 0)
+        port (or (tcp/local-port ls) (error "test: the listener reported no local port")))
+    (let (client (tcp/connect "127.0.0.1" port)
+          server (receive ([:tcp-accept ^ls cs] cs) (after 5000 :timeout)))
+      (tcp/set-binary server true)
+      (tcp/set-binary client true)
+      (let (request {:method "GET" :path "/channel/ws" :query "" :params {} :headers {} :body ""}
+            pid (spawn (receive ([:go] (start-socket server request nil)))))
+        (tcp/controlling-process server pid)
+        (send pid [:go])
+        (let (result (body client))
+          (tcp/close client)
+          (tcp/close ls)
+          result)))))
+
+(describe "the room channel over a real socket"
+  :isolated
+  ;; The routing is the part a unit test cannot show: that `room:*` in the router sends a
+  ;; frame naming `room:lobby` to THIS module, and that the reply carries the client's ref.
+  (test "a join is routed here by its topic and answered on its own ref"
+    (register-channel "room:*" (fn () (room/live-channel-spec)))
+    (let (text (with-socket (fn (client)
+                              (tcp/send client
+                                (masked-text-frame "{\"topic\":\"room:lobby\",\"event\":\"join\",\"payload\":{\"name\":\"ada\"},\"ref\":\"1\"}"))
+                              (first (expect-frame client (bytes []))))))
+      (assert= (includes? text "\"ref\":\"1\"") true)
+      (assert= (includes? text "\"status\":\"ok\"") true)
+      (assert= (includes? text "ada") true)))
+
+  (test "a message broadcast from outside reaches the joined client"
+    (register-channel "room:*" (fn () (room/live-channel-spec)))
+    (let (text (with-socket (fn (client)
+                              (tcp/send client
+                                (masked-text-frame "{\"topic\":\"room:dev\",\"event\":\"join\",\"ref\":\"1\"}"))
+                              (let (after-join (second (expect-frame client (bytes []))))
+                                (broadcast-to "room:dev" "said" {:name "someone" :body "hello"})
+                                (first (expect-frame client after-join))))))
+      (assert= (includes? text "\"event\":\"said\"") true)
+      (assert= (includes? text "hello") true))))

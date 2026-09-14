@@ -26,12 +26,11 @@
 (def session-secret
   (or (os/env "HATCH_SECRET_KEY_BASE") "dev-only-insecure-secret-change-me"))
 
-(deflive
-  (on-mount-guard (conn)
-    (let (conn ((session/fetch-session (session/cookie-store session-secret {})) conn))
-      (if (string/blank? (session/get-session conn "name" ""))
-        "/account"
-        nil)))
+(deflive (on-mount-guard (conn)
+           (let (conn ((session/fetch-session (session/cookie-store session-secret {})) conn))
+             (if (string/blank? (session/get-session conn "name" ""))
+               "/account"
+               nil)))
 
   (mount (params) {:count 0})
 
@@ -79,7 +78,8 @@
             " template rather than inline Hiccup."]
           (component web/views/components/counter-widget {"id" "dash-counter" "start" 0})]]])
 
-  (on "bump" (params model)
+  (on "bump"
+    (params model)
     (let (n (inc (get model :count)))
       ; demonstrate send-update: an out-of-band push into a component's state, from a
       ; handler that isn't the component's own — (self) is the session pid here, since
