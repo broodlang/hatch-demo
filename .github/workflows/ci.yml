@@ -22,3 +22,124 @@ concurrency:
 jobs:
   ci:
     uses: broodlang/brood/.github/workflows/package-ci.yml@main
+
+  # The browser suite is a second gate, and it stays here rather than in the shared
+  # workflow because it is not shared: this is the only repo in the org with a browser to
+  # run, so there is no duplication to hoist. Browser-specific machinery — Node, a
+  # Chromium download, a Postgres the app boots against — does not belong in a file eleven
+  # repos call for the sake of one. If a second repo ever grows a suite like this, that is
+  # the moment to move it, not before.
+  #
+  # It is also the ONE place npm enters either repo, fenced to CI: never `bin/setup`,
+  # never a dependency of the app, never anything a contributor needs to run `nest test`.
+  # It earns that because the whole class of bug it catches is unreachable from Brood — a
+  # DOM merge that duplicates rows, a rejoin that fires twice, a binding that pushes its
+  # event and then lets the page reload out from under the session.
+  browser:
+    name: browser suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Same key as package-ci.yml's, deliberately: the two jobs then share one cached
+      # toolchain instead of building brood twice per run.
+      - name: Resolve brood HEAD
+        id: brood
+        run: echo "sha=$(git ls-remote https://github.com/broodlang/brood.git main | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the brood toolchain
+        id: cache-brood
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin
+          key: brood-bin-${{ runner.os }}-${{ steps.brood.outputs.sha }}
+
+      - name: Build brood
+        if: steps.cache-brood.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch main https://github.com/broodlang/brood.git /tmp/brood
+          cd /tmp/brood
+          cargo build --release --features brood/treesit-grammars --bin brood --bin nest
+          mkdir -p "$HOME/.local/bin"
+          cp target/release/brood target/release/nest "$HOME/.local/bin/"
+
+      # `nest run` boots the whole app, and the app opens a Postgres pool as a supervised
+      # child — so unlike `nest test`, the browser suite needs a real server or nothing
+      # starts. Started as a plain container rather than a `services:` block for the reason
+      # package-ci.yml gives: a `services:` mapping cannot be made conditional.
+      - name: Start Postgres
+        run: |
+          set -uo pipefail
+          docker run -d --name ci-postgres \
+            -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=postgres \
+            -p 5432:5432 postgres:16-alpine
+          ready=""
+          for i in $(seq 1 60); do
+            if docker exec ci-postgres pg_isready -U postgres -q; then ready=yes; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::Postgres did not accept connections within 60s — diagnostics follow"
+            docker ps -a || true
+            docker logs ci-postgres 2>&1 | tail -40 || true
+            exit 1
+          fi
+
+      - name: Resolve dependencies
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          nest fetch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No lockfile is committed (it is gitignored — this is not how the app is built), so
+      # `npm install` it is. The devDependency is pinned to an exact version rather than a
+      # range, which is what makes that reproducible.
+      - name: Install Playwright
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      # Warm the startup image BEFORE the suite, so the run under test boots from a
+      # restored image rather than from source. This is not a speed optimisation — it is
+      # the case that matters. hatch 0.21.0 held its live-route table in a process, which
+      # an image cannot carry, and every live view died on an app's SECOND run. A CI runner
+      # is fresh every time, so a suite that only ever boots cold would have been green
+      # throughout that bug. Production restarts from an image; so does this.
+      - name: Warm the startup image
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          nest run --for 8s
+
+      - name: Browser tests
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          npm run test:browser
+
+      # A failure here is a race in the client, and the trace is the only way to read one
+      # after the fact — the suite does not retry, precisely so the flake is the finding.
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

@@ -9,10 +9,11 @@
 
 # Content-fingerprinted assets + manifest — produced by the release build
 # (web/assets/fingerprint); regenerable, not committed. Since hatch 0.2.0 the
-# fingerprint step also precompresses each text asset to a `.gz` sibling, which
-# web/static serves to `Accept-Encoding: gzip` clients.
+# fingerprint step also precompresses each text asset, writing `.br` and `.gz` siblings
+# together, which web/static serves by what the client says it accepts (brotli preferred).
 /static/app.*.css
 /static/app.*.css.gz
+/static/app.*.css.br
 /static/cache-manifest
 
 # Crash dump appended by the panic hook — local debug artifact, not committed.
@@ -26,3 +27,10 @@
 
 # Check/startup-image cache (`nest check`, ADR-218) — regenerable.
 /.brood/
+
+# Browser-test toolchain — CI only, and the one place npm enters this repo.
+# The app needs none of it: `nest run`, `nest test` and bin/setup are unaffected.
+/node_modules/
+/package-lock.json
+/test-results/
+/playwright-report/

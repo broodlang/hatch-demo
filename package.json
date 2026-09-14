@@ -1,0 +1,11 @@
+{
+  "name": "hatch-demo-browser-tests",
+  "private": true,
+  "description": "Browser tests only. This is NOT how hatch-demo is built or run — `nest run`, `nest test` and bin/setup need none of it. See tests/browser/playwright.config.js for why the exception exists and where its fence is.",
+  "scripts": {
+    "test:browser": "playwright test --config=tests/browser/playwright.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}
