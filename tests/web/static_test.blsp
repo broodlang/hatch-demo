@@ -21,11 +21,17 @@
                                                :headers {}
                                                :body ""}))
 
+;; The app asset these reach for is `sparkline.js`, not the stylesheet, and that is not
+;; arbitrary. `static/app.css` is BUILT from `assets/app.css` by `bin/tailwindcss`, and both
+;; the binary and its output are gitignored — so it exists on any machine that has run
+;; `bin/setup` and on no other. These two tests asked for it, passed for everyone locally,
+;; and 404'd on every CI run from 2026-09-13 onward: ten red runs on a fresh checkout, for a
+;; file the repo does not carry. Assert against something committed.
 (describe "the :static stage"
   (test "serves an app asset under ./static"
-    (let (resp (get-static "/static/app.css"))
+    (let (resp (get-static "/static/sparkline.js"))
       (assert= (get resp :status) 200)
-      (assert= (get (get resp :headers) :content-type) "text/css; charset=utf-8")))
+      (assert= (get (get resp :headers) :content-type) "text/javascript; charset=utf-8")))
 
   (test "a miss is a 404, not a crash"
     (assert= (get (get-static "/static/nope.css") :status) 404))
@@ -44,7 +50,7 @@
   ;; re-encode it — that would leave the tag describing a body no longer being sent.
   (test "a static response keeps its own validator and is not re-compressed"
     (let (resp ((web/endpoint/adapter (web/server/config)) {:method "GET"
-                                                            :path "/static/app.css"
+                                                            :path "/static/sparkline.js"
                                                             :query ""
                                                             :params {}
                                                             :headers {:accept-encoding "gzip, deflate, br"}
