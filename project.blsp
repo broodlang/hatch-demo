@@ -13,7 +13,7 @@
 (project
   :name "hatch-demo"
   :version "0.3.4"
-  :brood ">= 0.23.0"
+  :brood ">= 0.29.0"
   :dependencies
     [[hatch :version "^0.21.3"]
       [store-postgres :version "^0.6.0"]]
